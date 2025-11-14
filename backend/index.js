@@ -3,8 +3,8 @@ import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import { connect } from './src/config/db.js';
-import authRoutes from './src/routes/auth.js';
+import { initializeFirebase } from './src/config/firebase.js';
+import authRoutes from './src/routes/auth-firebase.js';
 import caseRoutes from './src/routes/cases.js';
 import clientRoutes from './src/routes/clients.js';
 import alertRoutes from './src/routes/alerts.js';
@@ -20,10 +20,57 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:8080', credentials: true }));
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:8080').split(',');
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      console.warn('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Set-Cookie']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan('dev'));
+
+// Handle favicon requests (browsers automatically request this)
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end(); // No Content - stops browser from requesting again
+});
+
+// Root route
+app.get('/', (req, res) => {
+  res.json({ 
+    ok: true, 
+    service: 'lawyer-zen-api',
+    message: 'API is running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      cases: '/api/cases',
+      clients: '/api/clients',
+      documents: '/api/documents',
+      invoices: '/api/invoices',
+      hearings: '/api/hearings',
+      alerts: '/api/alerts',
+      timeEntries: '/api/time-entries',
+      dashboard: '/api/dashboard',
+      legalSections: '/api/legal-sections'
+    }
+  });
+});
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'lawyer-zen-api' });
@@ -40,7 +87,8 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/hearings', hearingRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
-// Serve uploads
+// Serve uploads (legacy support - files now stored in Cloudinary)
+// This route is kept for backward compatibility with old files
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,13 +96,26 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const PORT = process.env.PORT || 5000;
 
-connect().then(() => {
-  app.listen(PORT, () => {
-    console.log(`API listening on port ${PORT}`);
-  });
-}).catch((err) => {
-  console.error('Failed to connect to database', err);
+// Initialize Firebase (required for Firestore)
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 
+      process.env.FIREBASE_SERVICE_ACCOUNT || 
+      (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL)) {
+    initializeFirebase();
+    console.log('Firebase initialized successfully');
+  } else {
+    console.error('Firebase configuration required. Please set Firebase environment variables.');
+    process.exit(1);
+  }
+} catch (error) {
+  console.error('Firebase initialization failed:', error.message);
   process.exit(1);
+}
+
+app.listen(PORT, () => {
+  console.log(`API listening on port ${PORT}`);
+  console.log('Using Firebase Firestore for database');
+  console.log('Using Cloudinary for media storage');
 });
 
 

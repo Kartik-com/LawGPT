@@ -1,8 +1,8 @@
-import Activity from '../models/Activity.js';
+import { createDocument, COLLECTIONS } from '../services/firestore.js';
 
 export const logActivity = async (userId, type, message, entityType, entityId, metadata = {}) => {
   try {
-    await Activity.create({
+    await createDocument(COLLECTIONS.ACTIVITIES, {
       owner: userId,
       type,
       message,

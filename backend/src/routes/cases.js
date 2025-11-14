@@ -1,21 +1,48 @@
 import express from 'express';
-import Case from '../models/Case.js';
 import { requireAuth } from '../middleware/auth.js';
 import { logActivity } from '../middleware/activityLogger.js';
+import { 
+  createDocument, 
+  getDocumentById, 
+  updateDocument, 
+  deleteDocument,
+  queryDocuments,
+  COLLECTIONS 
+} from '../services/firestore.js';
 
 const router = express.Router();
 
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const items = await Case.find({ owner: req.user.userId }).sort({ createdAt: -1 });
-  res.json(items);
+  try {
+    const cases = await queryDocuments(
+      COLLECTIONS.CASES,
+      [{ field: 'owner', operator: '==', value: req.user.userId }],
+      { field: 'createdAt', direction: 'desc' }
+    );
+    res.json(cases);
+  } catch (error) {
+    console.error('Get cases error:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch cases',
+      ...(process.env.NODE_ENV === 'development' && {
+        details: error.message,
+        code: error.code
+      })
+    });
+  }
 });
 
 router.post('/', async (req, res) => {
   try {
     const data = { ...req.body, owner: req.user.userId };
-    const item = await Case.create(data);
+    const item = await createDocument(COLLECTIONS.CASES, data);
     
     // Log activity
     await logActivity(
@@ -23,7 +50,7 @@ router.post('/', async (req, res) => {
       'case_created',
       `New case ${item.caseNumber} created for ${item.clientName}`,
       'case',
-      item._id,
+      item.id,
       {
         caseNumber: item.caseNumber,
         clientName: item.clientName,
@@ -40,15 +67,26 @@ router.post('/', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const item = await Case.findOne({ _id: req.params.id, owner: req.user.userId });
-  if (!item) return res.status(404).json({ error: 'Not found' });
-  res.json(item);
+  try {
+    const item = await getDocumentById(COLLECTIONS.CASES, req.params.id);
+    if (!item || item.owner !== req.user.userId) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    res.json(item);
+  } catch (error) {
+    console.error('Get case error:', error);
+    res.status(500).json({ error: 'Failed to fetch case' });
+  }
 });
 
 router.put('/:id', async (req, res) => {
   try {
-    const item = await Case.findOneAndUpdate({ _id: req.params.id, owner: req.user.userId }, req.body, { new: true });
-    if (!item) return res.status(404).json({ error: 'Not found' });
+    const existing = await getDocumentById(COLLECTIONS.CASES, req.params.id);
+    if (!existing || existing.owner !== req.user.userId) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    
+    const item = await updateDocument(COLLECTIONS.CASES, req.params.id, req.body);
     
     // Log activity
     await logActivity(
@@ -56,7 +94,7 @@ router.put('/:id', async (req, res) => {
       'case_updated',
       `Case ${item.caseNumber} updated`,
       'case',
-      item._id,
+      item.id,
       {
         caseNumber: item.caseNumber,
         clientName: item.clientName,
@@ -73,9 +111,18 @@ router.put('/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  const result = await Case.deleteOne({ _id: req.params.id, owner: req.user.userId });
-  if (result.deletedCount === 0) return res.status(404).json({ error: 'Not found' });
-  res.json({ ok: true });
+  try {
+    const existing = await getDocumentById(COLLECTIONS.CASES, req.params.id);
+    if (!existing || existing.owner !== req.user.userId) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    
+    await deleteDocument(COLLECTIONS.CASES, req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete case error:', error);
+    res.status(500).json({ error: 'Failed to delete case' });
+  }
 });
 
 export default router;

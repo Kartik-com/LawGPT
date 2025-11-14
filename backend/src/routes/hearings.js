@@ -1,7 +1,14 @@
 import express from 'express';
-import Hearing from '../models/Hearing.js';
 import { requireAuth } from '../middleware/auth.js';
 import { logActivity } from '../middleware/activityLogger.js';
+import { 
+  createDocument, 
+  getDocumentById, 
+  updateDocument, 
+  deleteDocument,
+  queryDocuments,
+  COLLECTIONS 
+} from '../services/firestore.js';
 
 const router = express.Router();
 
@@ -10,10 +17,14 @@ router.use(requireAuth);
 // Get all hearings for a specific case
 router.get('/case/:caseId', async (req, res) => {
   try {
-    const hearings = await Hearing.find({ 
-      caseId: req.params.caseId, 
-      owner: req.user.userId 
-    }).sort({ hearingDate: -1 });
+    const hearings = await queryDocuments(
+      COLLECTIONS.HEARINGS,
+      [
+        { field: 'caseId', operator: '==', value: req.params.caseId },
+        { field: 'owner', operator: '==', value: req.user.userId }
+      ],
+      { field: 'hearingDate', direction: 'desc' }
+    );
     res.json(hearings);
   } catch (error) {
     console.error('Get hearings error:', error);
@@ -24,25 +35,66 @@ router.get('/case/:caseId', async (req, res) => {
 // Get all hearings for the user
 router.get('/', async (req, res) => {
   try {
-    const hearings = await Hearing.find({ owner: req.user.userId })
-      .populate('caseId', 'caseNumber clientName')
-      .sort({ hearingDate: -1 });
-    res.json(hearings);
+    const hearings = await queryDocuments(
+      COLLECTIONS.HEARINGS,
+      [{ field: 'owner', operator: '==', value: req.user.userId }],
+      { field: 'hearingDate', direction: 'desc' }
+    );
+    
+    // Populate case info
+    const hearingsWithCases = await Promise.all(hearings.map(async (hearing) => {
+      if (hearing.caseId) {
+        try {
+          const case_ = await getDocumentById(COLLECTIONS.CASES, hearing.caseId);
+          return {
+            ...hearing,
+            caseId: case_ ? {
+              caseNumber: case_.caseNumber,
+              clientName: case_.clientName
+            } : hearing.caseId
+          };
+        } catch (err) {
+          // If case not found, return hearing without populated case
+          return hearing;
+        }
+      }
+      return hearing;
+    }));
+    
+    res.json(hearingsWithCases);
   } catch (error) {
     console.error('Get all hearings error:', error);
-    res.status(500).json({ error: 'Failed to fetch hearings' });
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch hearings',
+      ...(process.env.NODE_ENV === 'development' && {
+        details: error.message,
+        code: error.code
+      })
+    });
   }
 });
 
 // Get a specific hearing
 router.get('/:id', async (req, res) => {
   try {
-    const hearing = await Hearing.findOne({ 
-      _id: req.params.id, 
-      owner: req.user.userId 
-    }).populate('caseId', 'caseNumber clientName');
+    const hearing = await getDocumentById(COLLECTIONS.HEARINGS, req.params.id);
     
     if (!hearing) return res.status(404).json({ error: 'Hearing not found' });
+    if (hearing.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    
+    // Populate case info
+    if (hearing.caseId) {
+      const case_ = await getDocumentById(COLLECTIONS.CASES, hearing.caseId);
+      hearing.caseId = case_ ? {
+        caseNumber: case_.caseNumber,
+        clientName: case_.clientName
+      } : hearing.caseId;
+    }
+    
     res.json(hearing);
   } catch (error) {
     console.error('Get hearing error:', error);
@@ -54,18 +106,19 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const data = { ...req.body, owner: req.user.userId };
-    const hearing = await Hearing.create(data);
+    const hearing = await createDocument(COLLECTIONS.HEARINGS, data);
     
     // Log activity
+    const hearingDate = hearing.hearingDate?.toDate ? hearing.hearingDate.toDate() : new Date(hearing.hearingDate);
     await logActivity(
       req.user.userId,
       'hearing_created',
-      `New hearing scheduled for case ${hearing.caseId} on ${hearing.hearingDate.toLocaleDateString()}`,
+      `New hearing scheduled for case ${hearing.caseId} on ${hearingDate.toLocaleDateString()}`,
       'hearing',
-      hearing._id,
+      hearing.id,
       {
         caseId: hearing.caseId,
-        hearingDate: hearing.hearingDate,
+        hearingDate: hearingDate,
         hearingType: hearing.hearingType,
         status: hearing.status
       }
@@ -81,26 +134,33 @@ router.post('/', async (req, res) => {
 // Update a hearing
 router.put('/:id', async (req, res) => {
   try {
-    const hearing = await Hearing.findOneAndUpdate(
-      { _id: req.params.id, owner: req.user.userId }, 
-      req.body, 
-      { new: true }
-    ).populate('caseId', 'caseNumber clientName');
+    const original = await getDocumentById(COLLECTIONS.HEARINGS, req.params.id);
+    if (!original) return res.status(404).json({ error: 'Hearing not found' });
+    if (original.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
     
-    if (!hearing) {
-      return res.status(404).json({ error: 'Hearing not found' });
+    const hearing = await updateDocument(COLLECTIONS.HEARINGS, req.params.id, req.body);
+    
+    // Populate case info
+    if (hearing.caseId) {
+      const case_ = await getDocumentById(COLLECTIONS.CASES, hearing.caseId);
+      hearing.caseId = case_ ? {
+        caseNumber: case_.caseNumber,
+        clientName: case_.clientName
+      } : hearing.caseId;
     }
     
     // Log activity
+    const hearingDate = hearing.hearingDate?.toDate ? hearing.hearingDate.toDate() : new Date(hearing.hearingDate);
+    const caseNumber = typeof hearing.caseId === 'object' ? hearing.caseId?.caseNumber : hearing.caseId;
     await logActivity(
       req.user.userId,
       'hearing_updated',
-      `Hearing updated for case ${hearing.caseId?.caseNumber || hearing.caseId} on ${hearing.hearingDate.toLocaleDateString()}`,
+      `Hearing updated for case ${caseNumber || hearing.caseId} on ${hearingDate.toLocaleDateString()}`,
       'hearing',
-      hearing._id,
+      hearing.id,
       {
         caseId: hearing.caseId,
-        hearingDate: hearing.hearingDate,
+        hearingDate: hearingDate,
         hearingType: hearing.hearingType,
         status: hearing.status
       }
@@ -116,34 +176,29 @@ router.put('/:id', async (req, res) => {
 // Delete a hearing
 router.delete('/:id', async (req, res) => {
   try {
-    const hearing = await Hearing.findOne({ 
-      _id: req.params.id, 
-      owner: req.user.userId 
-    });
+    const hearing = await getDocumentById(COLLECTIONS.HEARINGS, req.params.id);
     
     if (!hearing) {
       return res.status(404).json({ error: 'Hearing not found' });
     }
     
-    const result = await Hearing.deleteOne({ 
-      _id: req.params.id, 
-      owner: req.user.userId 
-    });
-    
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: 'Hearing not found' });
+    if (hearing.owner !== req.user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
     }
     
+    await deleteDocument(COLLECTIONS.HEARINGS, req.params.id);
+    
     // Log activity
+    const hearingDate = hearing.hearingDate?.toDate ? hearing.hearingDate.toDate() : new Date(hearing.hearingDate);
     await logActivity(
       req.user.userId,
       'hearing_deleted',
-      `Hearing deleted for case ${hearing.caseId} on ${hearing.hearingDate.toLocaleDateString()}`,
+      `Hearing deleted for case ${hearing.caseId} on ${hearingDate.toLocaleDateString()}`,
       'hearing',
-      hearing._id,
+      hearing.id,
       {
         caseId: hearing.caseId,
-        hearingDate: hearing.hearingDate,
+        hearingDate: hearingDate,
         hearingType: hearing.hearingType
       }
     );
@@ -163,15 +218,37 @@ router.get('/today/list', async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
-    const hearings = await Hearing.find({
-      owner: req.user.userId,
-      hearingDate: {
-        $gte: today,
-        $lt: tomorrow
-      }
-    }).populate('caseId', 'caseNumber clientName').sort({ hearingTime: 1 });
+    const allHearings = await queryDocuments(
+      COLLECTIONS.HEARINGS,
+      [{ field: 'owner', operator: '==', value: req.user.userId }]
+    );
     
-    res.json(hearings);
+    const todaysHearings = allHearings.filter(hearing => {
+      if (!hearing.hearingDate) return false;
+      const hearingDate = hearing.hearingDate.toDate ? hearing.hearingDate.toDate() : new Date(hearing.hearingDate);
+      return hearingDate >= today && hearingDate < tomorrow;
+    }).sort((a, b) => {
+      const aTime = a.hearingTime || '';
+      const bTime = b.hearingTime || '';
+      return aTime.localeCompare(bTime);
+    });
+    
+    // Populate case info
+    const hearingsWithCases = await Promise.all(todaysHearings.map(async (hearing) => {
+      if (hearing.caseId) {
+        const case_ = await getDocumentById(COLLECTIONS.CASES, hearing.caseId);
+        return {
+          ...hearing,
+          caseId: case_ ? {
+            caseNumber: case_.caseNumber,
+            clientName: case_.clientName
+          } : hearing.caseId
+        };
+      }
+      return hearing;
+    }));
+    
+    res.json(hearingsWithCases);
   } catch (error) {
     console.error('Get today hearings error:', error);
     res.status(500).json({ error: 'Failed to fetch today\'s hearings' });

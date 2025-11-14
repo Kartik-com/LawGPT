@@ -1,24 +1,48 @@
 import express from 'express';
-import TimeEntry from '../models/TimeEntry.js';
-import Case from '../models/Case.js';
 import { requireAuth } from '../middleware/auth.js';
 import { logActivity } from '../middleware/activityLogger.js';
+import { 
+  createDocument, 
+  getDocumentById, 
+  deleteDocument,
+  queryDocuments,
+  COLLECTIONS 
+} from '../services/firestore.js';
 
 const router = express.Router();
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const items = await TimeEntry.find({ owner: req.user.userId }).sort({ createdAt: -1 });
-  res.json(items);
+  try {
+    const items = await queryDocuments(
+      COLLECTIONS.TIME_ENTRIES,
+      [{ field: 'owner', operator: '==', value: req.user.userId }],
+      { field: 'createdAt', direction: 'desc' }
+    );
+    res.json(items);
+  } catch (error) {
+    console.error('Get time entries error:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch time entries',
+      ...(process.env.NODE_ENV === 'development' && {
+        details: error.message,
+        code: error.code
+      })
+    });
+  }
 });
 
 router.post('/', async (req, res) => {
   try {
     const data = { ...req.body, owner: req.user.userId };
-    const item = await TimeEntry.create(data);
+    const item = await createDocument(COLLECTIONS.TIME_ENTRIES, data);
     
     // Get case info for activity log
-    const case_ = await Case.findById(item.caseId);
+    const case_ = item.caseId ? await getDocumentById(COLLECTIONS.CASES, item.caseId) : null;
     
     // Log activity - assuming duration is in minutes
     const durationInMinutes = item.duration;
@@ -31,7 +55,7 @@ router.post('/', async (req, res) => {
       'time_logged',
       `${durationText} logged for ${case_?.caseNumber || 'case'}`,
       'time_entry',
-      item._id,
+      item.id,
       {
         duration: item.duration, // Store original duration in minutes
         durationText: durationText, // Store formatted duration for display
@@ -50,9 +74,17 @@ router.post('/', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  const result = await TimeEntry.deleteOne({ _id: req.params.id, owner: req.user.userId });
-  if (result.deletedCount === 0) return res.status(404).json({ error: 'Not found' });
-  res.json({ ok: true });
+  try {
+    const item = await getDocumentById(COLLECTIONS.TIME_ENTRIES, req.params.id);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    if (item.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    
+    await deleteDocument(COLLECTIONS.TIME_ENTRIES, req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete time entry error:', error);
+    res.status(500).json({ error: 'Failed to delete time entry' });
+  }
 });
 
 export default router;

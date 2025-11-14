@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { useAuth } from './AuthContext';
+import { getApiUrl } from '@/lib/api';
 
 export interface Case {
   id: string;
@@ -231,32 +233,77 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   const [hearings, setHearings] = useState<Hearing[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
 
-  // Initial loads
+  // Get authentication status
+  const { isAuthenticated } = useAuth();
+
+  // Initial loads - only fetch if user is authenticated
   React.useEffect(() => {
+    // Don't fetch data if user is not authenticated
+    if (!isAuthenticated) {
+      return;
+    }
+
     // Load initial data from API
     Promise.all([
-      fetch('/api/cases', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.resolve([])),
-      fetch('/api/clients', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.resolve([])),
-      fetch('/api/alerts', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.resolve([])),
-      fetch('/api/time-entries', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.resolve([])),
-      fetch('/api/hearings', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.resolve([])),
-      fetch('/api/invoices', { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.resolve([])),
+      fetch(getApiUrl('/api/cases'), { credentials: 'include' })
+        .then(r => {
+          if (r.status === 401) {
+            // User not authenticated, return empty array
+            return [];
+          }
+          return r.ok ? r.json() : Promise.resolve([]);
+        })
+        .catch(() => []),
+      fetch(getApiUrl('/api/clients'), { credentials: 'include' })
+        .then(r => {
+          if (r.status === 401) return [];
+          return r.ok ? r.json() : Promise.resolve([]);
+        })
+        .catch(() => []),
+      fetch(getApiUrl('/api/alerts'), { credentials: 'include' })
+        .then(r => {
+          if (r.status === 401) return [];
+          return r.ok ? r.json() : Promise.resolve([]);
+        })
+        .catch(() => []),
+      fetch(getApiUrl('/api/time-entries'), { credentials: 'include' })
+        .then(r => {
+          if (r.status === 401) return [];
+          return r.ok ? r.json() : Promise.resolve([]);
+        })
+        .catch(() => []),
+      fetch(getApiUrl('/api/hearings'), { credentials: 'include' })
+        .then(r => {
+          if (r.status === 401) return [];
+          return r.ok ? r.json() : Promise.resolve([]);
+        })
+        .catch(() => []),
+      fetch(getApiUrl('/api/invoices'), { credentials: 'include' })
+        .then(r => {
+          if (r.status === 401) return [];
+          return r.ok ? r.json() : Promise.resolve([]);
+        })
+        .catch(() => []),
     ]).then(([casesRes, clientsRes, alertsRes, timeEntriesRes, hearingsRes, invoicesRes]) => {
-      setCases(casesRes.map(mapCaseFromApi));
-      setClients(clientsRes.map(mapClientFromApi));
-      setAlerts(alertsRes.map(mapAlertFromApi));
-      setTimeEntries(timeEntriesRes.map(mapTimeEntryFromApi));
-      const mappedHearings = hearingsRes.map(mapHearingFromApi);
+      setCases(Array.isArray(casesRes) ? casesRes.map(mapCaseFromApi) : []);
+      setClients(Array.isArray(clientsRes) ? clientsRes.map(mapClientFromApi) : []);
+      setAlerts(Array.isArray(alertsRes) ? alertsRes.map(mapAlertFromApi) : []);
+      setTimeEntries(Array.isArray(timeEntriesRes) ? timeEntriesRes.map(mapTimeEntryFromApi) : []);
+      const mappedHearings = Array.isArray(hearingsRes) ? hearingsRes.map(mapHearingFromApi) : [];
       setHearings(mappedHearings);
-      setInvoices(invoicesRes.map(mapInvoiceFromApi));
+      setInvoices(Array.isArray(invoicesRes) ? invoicesRes.map(mapInvoiceFromApi) : []);
     }).catch((error) => {
       // Silently ignore errors; UI can still function without data
+      // Don't log 401 errors as they're expected when not authenticated
+      if (error.status !== 401) {
+        console.error('Error loading data:', error);
+      }
     });
-  }, []);
+  }, [isAuthenticated]);
 
   // Case management functions
   const addCase = async (caseData: Omit<Case, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const res = await fetch('/api/cases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(caseData) });
+    const res = await fetch(getApiUrl('/api/cases'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(caseData) });
     if (res.ok) {
       const saved = await res.json();
       const mappedCase = mapCaseFromApi(saved);
@@ -265,7 +312,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
       // Automatically create a folder for the new case
       try {
         const folderName = `${saved.caseNumber} - ${saved.clientName}`;
-        const folderRes = await fetch('/api/documents/folders', {
+        const folderRes = await fetch(getApiUrl('/api/documents/folders'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -284,7 +331,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   const updateCase = async (caseId: string, updates: Partial<Case>) => {
-    const res = await fetch(`/api/cases/${caseId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(updates) });
+    const res = await fetch(getApiUrl(`/api/cases/${caseId}`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(updates) });
     if (res.ok) {
       const saved = await res.json();
       setCases(prev => prev.map(c => c.id === caseId ? mapCaseFromApi(saved) : c));
@@ -292,7 +339,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   const deleteCase = async (caseId: string) => {
-    const res = await fetch(`/api/cases/${caseId}`, { method: 'DELETE', credentials: 'include' });
+    const res = await fetch(getApiUrl(`/api/cases/${caseId}`), { method: 'DELETE', credentials: 'include' });
     if (res.ok) setCases(prev => prev.filter(c => c.id !== caseId));
   };
 
@@ -303,7 +350,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   // Client management functions
   const addClient = async (clientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      const res = await fetch('/api/clients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(clientData) });
+      const res = await fetch(getApiUrl('/api/clients'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(clientData) });
       if (res.ok) {
         const saved = await res.json();
         setClients(prev => [...prev, mapClientFromApi(saved)]);
@@ -318,7 +365,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   const updateClient = async (clientId: string, updates: Partial<Client>) => {
-    const res = await fetch(`/api/clients/${clientId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(updates) });
+    const res = await fetch(getApiUrl(`/api/clients/${clientId}`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(updates) });
     if (res.ok) {
       const saved = await res.json();
       setClients(prev => prev.map(c => c.id === clientId ? mapClientFromApi(saved) : c));
@@ -326,13 +373,13 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   const deleteClient = async (clientId: string) => {
-    const res = await fetch(`/api/clients/${clientId}`, { method: 'DELETE', credentials: 'include' });
+    const res = await fetch(getApiUrl(`/api/clients/${clientId}`), { method: 'DELETE', credentials: 'include' });
     if (res.ok) setClients(prev => prev.filter(c => c.id !== clientId));
   };
 
   // Alert management
   const addAlert = async (alertData: Omit<Alert, 'id' | 'createdAt'>) => {
-    const res = await fetch('/api/alerts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(alertData) });
+    const res = await fetch(getApiUrl('/api/alerts'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(alertData) });
     if (res.ok) {
       const saved = await res.json();
       setAlerts(prev => [...prev, mapAlertFromApi(saved)]);
@@ -340,7 +387,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   const markAlertAsRead = async (alertId: string) => {
-    const res = await fetch(`/api/alerts/${alertId}/read`, { method: 'PATCH', credentials: 'include' });
+    const res = await fetch(getApiUrl(`/api/alerts/${alertId}/read`), { method: 'PATCH', credentials: 'include' });
     if (res.ok) {
       const saved = await res.json();
       setAlerts(prev => prev.map(a => a.id === alertId ? mapAlertFromApi(saved) : a));
@@ -348,7 +395,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   const deleteAlert = async (alertId: string) => {
-    const res = await fetch(`/api/alerts/${alertId}`, { method: 'DELETE', credentials: 'include' });
+    const res = await fetch(getApiUrl(`/api/alerts/${alertId}`), { method: 'DELETE', credentials: 'include' });
     if (res.ok) setAlerts(prev => prev.filter(a => a.id !== alertId));
   };
 
@@ -369,7 +416,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
 
   // Time tracking
   const addTimeEntry = async (entry: Omit<TimeEntry, 'id'>) => {
-    const res = await fetch('/api/time-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(entry) });
+    const res = await fetch(getApiUrl('/api/time-entries'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(entry) });
     if (res.ok) {
       const saved = await res.json();
       setTimeEntries(prev => [...prev, mapTimeEntryFromApi(saved)]);
@@ -378,7 +425,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
 
   // Hearing management functions
   const addHearing = async (hearing: Omit<Hearing, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const res = await fetch('/api/hearings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(hearing) });
+    const res = await fetch(getApiUrl('/api/hearings'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(hearing) });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({ error: 'Failed to create hearing' }));
       throw new Error(errorData.error || 'Failed to create hearing');
@@ -391,7 +438,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
 
   const updateHearing = async (hearingId: string, updates: Partial<Hearing>) => {
     try {
-      const res = await fetch(`/api/hearings/${hearingId}`, { 
+      const res = await fetch(getApiUrl(`/api/hearings/${hearingId}`), { 
         method: 'PUT', 
         headers: { 'Content-Type': 'application/json' }, 
         credentials: 'include', 
@@ -433,7 +480,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   const deleteHearing = async (hearingId: string) => {
-    const res = await fetch(`/api/hearings/${hearingId}`, { method: 'DELETE', credentials: 'include' });
+    const res = await fetch(getApiUrl(`/api/hearings/${hearingId}`), { method: 'DELETE', credentials: 'include' });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({ error: 'Failed to delete hearing' }));
       throw new Error(errorData.error || 'Failed to delete hearing');
@@ -450,7 +497,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   // Invoices
   const createInvoice = async (invoice: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>) => {
     const payload = mapInvoiceToApi(invoice);
-    const res = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
+    const res = await fetch(getApiUrl('/api/invoices'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
     if (res.ok) {
       const saved = await res.json();
       setInvoices(prev => [mapInvoiceFromApi(saved), ...prev]);
@@ -458,7 +505,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   const updateInvoice = async (invoiceId: string, updates: Partial<Invoice>) => {
-    const res = await fetch(`/api/invoices/${invoiceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(mapInvoicePartialToApi(updates)) });
+    const res = await fetch(getApiUrl(`/api/invoices/${invoiceId}`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(mapInvoicePartialToApi(updates)) });
     if (res.ok) {
       const saved = await res.json();
       setInvoices(prev => prev.map(i => i.id === invoiceId ? mapInvoiceFromApi(saved) : i));
@@ -466,12 +513,12 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   const deleteInvoice = async (invoiceId: string) => {
-    const res = await fetch(`/api/invoices/${invoiceId}`, { method: 'DELETE', credentials: 'include' });
+    const res = await fetch(getApiUrl(`/api/invoices/${invoiceId}`), { method: 'DELETE', credentials: 'include' });
     if (res.ok) setInvoices(prev => prev.filter(i => i.id !== invoiceId));
   };
 
   const sendInvoice = async (invoiceId: string, payload: { to?: string; subject?: string; message?: string }) => {
-    const res = await fetch(`/api/invoices/${invoiceId}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
+    const res = await fetch(getApiUrl(`/api/invoices/${invoiceId}/send`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
     if (!res.ok) throw new Error('Failed to send invoice');
     const body = await res.json();
     return { previewUrl: body.previewUrl } as { previewUrl?: string };

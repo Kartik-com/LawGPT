@@ -1,9 +1,15 @@
 import express from 'express';
-import Invoice from '../models/Invoice.js';
-import Client from '../models/Client.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendInvoiceEmail } from '../utils/mailer.js';
 import { logActivity } from '../middleware/activityLogger.js';
+import { 
+  createDocument, 
+  getDocumentById, 
+  updateDocument, 
+  deleteDocument,
+  queryDocuments,
+  COLLECTIONS 
+} from '../services/firestore.js';
 
 // Helper function to generate email content
 function generateInvoiceEmailContent(invoice, client) {
@@ -28,23 +34,48 @@ const router = express.Router();
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const items = await Invoice.find({ owner: req.user.userId }).sort({ createdAt: -1 });
-  res.json(items);
+  try {
+    const items = await queryDocuments(
+      COLLECTIONS.INVOICES,
+      [{ field: 'owner', operator: '==', value: req.user.userId }],
+      { field: 'createdAt', direction: 'desc' }
+    );
+    res.json(items);
+  } catch (error) {
+    console.error('Get invoices error:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch invoices',
+      ...(process.env.NODE_ENV === 'development' && {
+        details: error.message,
+        code: error.code
+      })
+    });
+  }
 });
 
 router.get('/:id', async (req, res) => {
-  const item = await Invoice.findOne({ _id: req.params.id, owner: req.user.userId });
-  if (!item) return res.status(404).json({ error: 'Not found' });
-  res.json(item);
+  try {
+    const item = await getDocumentById(COLLECTIONS.INVOICES, req.params.id);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    if (item.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    res.json(item);
+  } catch (error) {
+    console.error('Get invoice error:', error);
+    res.status(500).json({ error: 'Failed to fetch invoice' });
+  }
 });
 
 router.post('/', async (req, res) => {
   try {
     const data = { ...req.body, owner: req.user.userId };
-    const created = await Invoice.create(data);
+    const created = await createDocument(COLLECTIONS.INVOICES, data);
     
     // Get client info for activity log
-    const client = await Client.findById(created.clientId);
+    const client = created.clientId ? await getDocumentById(COLLECTIONS.CLIENTS, created.clientId) : null;
     
     // Log activity
     await logActivity(
@@ -52,7 +83,7 @@ router.post('/', async (req, res) => {
       'invoice_created',
       `Invoice ${created.invoiceNumber} created for ${client?.name || 'client'}`,
       'invoice',
-      created._id,
+      created.id,
       {
         invoiceNumber: created.invoiceNumber,
         clientName: client?.name,
@@ -71,17 +102,14 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    const original = await Invoice.findOne({ _id: req.params.id, owner: req.user.userId });
+    const original = await getDocumentById(COLLECTIONS.INVOICES, req.params.id);
     if (!original) return res.status(404).json({ error: 'Not found' });
+    if (original.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
     
-    const updated = await Invoice.findOneAndUpdate(
-      { _id: req.params.id, owner: req.user.userId },
-      req.body,
-      { new: true }
-    );
+    const updated = await updateDocument(COLLECTIONS.INVOICES, req.params.id, req.body);
     
     // Get client info for activity log
-    const client = await Client.findById(updated.clientId);
+    const client = updated.clientId ? await getDocumentById(COLLECTIONS.CLIENTS, updated.clientId) : null;
     
     // Check if payment status changed
     if (original.status !== 'paid' && updated.status === 'paid') {
@@ -90,7 +118,7 @@ router.put('/:id', async (req, res) => {
         'payment_received',
         `Payment received for invoice ${updated.invoiceNumber}`,
         'invoice',
-        updated._id,
+        updated.id,
         {
           invoiceNumber: updated.invoiceNumber,
           clientName: client?.name,
@@ -104,7 +132,7 @@ router.put('/:id', async (req, res) => {
         'invoice_updated',
         `Invoice ${updated.invoiceNumber} updated`,
         'invoice',
-        updated._id,
+        updated.id,
         {
           invoiceNumber: updated.invoiceNumber,
           clientName: client?.name,
@@ -123,26 +151,36 @@ router.put('/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  const result = await Invoice.deleteOne({ _id: req.params.id, owner: req.user.userId });
-  if (result.deletedCount === 0) return res.status(404).json({ error: 'Not found' });
-  res.json({ ok: true });
+  try {
+    const item = await getDocumentById(COLLECTIONS.INVOICES, req.params.id);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    if (item.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    
+    await deleteDocument(COLLECTIONS.INVOICES, req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete invoice error:', error);
+    res.status(500).json({ error: 'Failed to delete invoice' });
+  }
 });
 
 router.post('/:id/send', async (req, res) => {
-  const { to, subject, message } = req.body;
-  const invoice = await Invoice.findOne({ _id: req.params.id, owner: req.user.userId });
-  if (!invoice) return res.status(404).json({ error: 'Not found' });
-
-  // Get client information for personalized email
-  const client = await Client.findOne({ _id: invoice.clientId, owner: req.user.userId });
-  if (!client) return res.status(400).json({ error: 'Client not found for invoice' });
-
-  let recipient = to;
-  if (!recipient) {
-    recipient = client.email;
-  }
-
   try {
+    const { to, subject, message } = req.body;
+    const invoice = await getDocumentById(COLLECTIONS.INVOICES, req.params.id);
+    if (!invoice) return res.status(404).json({ error: 'Not found' });
+    if (invoice.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+
+    // Get client information for personalized email
+    const client = invoice.clientId ? await getDocumentById(COLLECTIONS.CLIENTS, invoice.clientId) : null;
+    if (!client) return res.status(400).json({ error: 'Client not found for invoice' });
+    if (client.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+
+    let recipient = to;
+    if (!recipient) {
+      recipient = client.email;
+    }
+
     const result = await sendInvoiceEmail({
       to: recipient,
       subject: subject || `Invoice ${invoice.invoiceNumber} - Legal Services - Due ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}`,
@@ -157,7 +195,7 @@ router.post('/:id/send', async (req, res) => {
       'invoice_sent',
       `Invoice ${invoice.invoiceNumber} sent to ${client.name}`,
       'invoice',
-      invoice._id,
+      invoice.id,
       {
         invoiceNumber: invoice.invoiceNumber,
         clientName: client.name,
@@ -168,8 +206,9 @@ router.post('/:id/send', async (req, res) => {
     );
     
     res.json(result);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+  } catch (error) {
+    console.error('Send invoice error:', error);
+    res.status(500).json({ error: error.message || 'Failed to send invoice' });
   }
 });
 

@@ -68,7 +68,14 @@ const Documents = () => {
   const [selectedFile, setSelectedFile] = useState<ApiFile | null>(null);
   const [showFileDetailsDialog, setShowFileDetailsDialog] = useState(false);
   
-  const backendUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+  // Import API utility
+  const getApiUrl = (path: string) => {
+    const apiUrl = (import.meta as any).env?.VITE_API_URL;
+    if (apiUrl) {
+      return `${apiUrl}${path.startsWith('/') ? path : `/${path}`}`;
+    }
+    return path.startsWith('/') ? path : `/${path}`;
+  };
 
   const detectType = (mimetype: string): DocType => {
     if (mimetype.includes('pdf')) return 'pdf';
@@ -153,7 +160,7 @@ const Documents = () => {
       
       try {
         setIsLoading(true);
-        const res = await fetch('/api/documents/upload', { 
+        const res = await fetch(getApiUrl('/api/documents/upload'), { 
           method: 'POST', 
           credentials: 'include', 
           body: form 
@@ -161,7 +168,19 @@ const Documents = () => {
         
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Upload failed');
+          const errorMessage = errorData.error || 'Upload failed';
+          const helpMessage = errorData.help;
+          
+          // Show detailed error with help if available
+          toast({ 
+            title: 'Upload Failed', 
+            description: helpMessage 
+              ? `${errorMessage}\n\n${helpMessage}`
+              : errorMessage,
+            variant: 'destructive',
+            duration: 10000 // Show for 10 seconds for configuration errors
+          });
+          throw new Error(errorMessage);
         }
         
         await loadFiles();
@@ -171,11 +190,14 @@ const Documents = () => {
         });
       } catch (error) {
         console.error('Upload error:', error);
-        toast({ 
-          title: 'Upload Failed', 
-          description: error instanceof Error ? error.message : 'Failed to upload files',
-          variant: 'destructive' 
-        });
+        // Don't show duplicate toast if we already showed one above
+        if (!error.message || !error.message.includes('Upload failed')) {
+          toast({ 
+            title: 'Upload Failed', 
+            description: error instanceof Error ? error.message : 'Failed to upload files',
+            variant: 'destructive' 
+          });
+        }
       } finally {
         setIsLoading(false);
       }
@@ -184,15 +206,57 @@ const Documents = () => {
     input.click();
   };
 
-  const fileUrl = (doc: ApiFile) => `${backendUrl}${doc.url}`;
+  const fileUrl = (doc: ApiFile) => {
+    // If URL is already a full URL (Cloudinary or external), use it directly
+    if (doc.url && (doc.url.startsWith('http://') || doc.url.startsWith('https://'))) {
+      return doc.url;
+    }
+    // Otherwise, prepend backend URL for local file paths
+    const apiUrl = (import.meta as any).env?.VITE_API_URL;
+    if (apiUrl) {
+      return `${apiUrl}${doc.url}`;
+    }
+    return doc.url;
+  };
 
-  const handleDownload = (doc: ApiFile) => {
-    const a = document.createElement('a');
-    a.href = fileUrl(doc);
-    a.download = doc.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleDownload = async (doc: ApiFile) => {
+    try {
+      const url = fileUrl(doc);
+      
+      // For Cloudinary URLs, fetch the file and create a blob for download
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch file');
+        
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = doc.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // Clean up the blob URL
+        URL.revokeObjectURL(blobUrl);
+      } else {
+        // For local files, use direct download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: 'Download Failed',
+        description: error instanceof Error ? error.message : 'Failed to download file',
+        variant: 'destructive'
+      });
+    }
   };
 
   const handleDelete = async (doc: ApiFile) => {
@@ -200,7 +264,7 @@ const Documents = () => {
     
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/documents/files/${doc._id}`, { 
+      const res = await fetch(getApiUrl(`/api/documents/files/${doc._id}`), { 
         method: 'DELETE', 
         credentials: 'include' 
       });
@@ -226,7 +290,7 @@ const Documents = () => {
 
   const loadFolders = async () => {
     try {
-      const res = await fetch('/api/documents/folders', { credentials: 'include' });
+      const res = await fetch(getApiUrl('/api/documents/folders'), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setFolders(data.folders || []);
@@ -242,13 +306,9 @@ const Documents = () => {
 
   const loadFiles = async () => {
     try {
-      if (!currentFolderId) { 
-        setFiles([]); 
-        return; 
-      }
-      
-      const q = `?folderId=${currentFolderId}`;
-      const res = await fetch(`/api/documents/files${q}`, { credentials: 'include' });
+      // Load files for current folder (or root if no folder selected)
+      const q = currentFolderId ? `?folderId=${currentFolderId}` : '?folderId=null';
+      const res = await fetch(getApiUrl(`/api/documents/files${q}`), { credentials: 'include' });
       
       if (res.ok) {
         const data = await res.json();
@@ -279,7 +339,7 @@ const Documents = () => {
         
         if (!folderExists) {
           try {
-            const folderRes = await fetch('/api/documents/folders', {
+            const folderRes = await fetch(getApiUrl('/api/documents/folders'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
@@ -312,7 +372,7 @@ const Documents = () => {
     }
     
     try {
-      const res = await fetch('/api/documents/folders', {
+      const res = await fetch(getApiUrl('/api/documents/folders'), {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         credentials: 'include',
@@ -342,7 +402,7 @@ const Documents = () => {
     if (!confirm(`Delete folder "${folder.name}" and all its contents?`)) return;
     
     try {
-      const res = await fetch(`/api/documents/folders/${folder._id}`, { 
+      const res = await fetch(getApiUrl(`/api/documents/folders/${folder._id}`), { 
         method: 'DELETE', 
         credentials: 'include' 
       });

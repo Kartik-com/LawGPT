@@ -1,37 +1,128 @@
 import express from 'express';
-import Alert from '../models/Alert.js';
 import { requireAuth } from '../middleware/auth.js';
+import { 
+  createDocument, 
+  getDocumentById, 
+  updateDocument, 
+  deleteDocument,
+  queryDocuments,
+  COLLECTIONS 
+} from '../services/firestore.js';
 
 const router = express.Router();
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const items = await Alert.find({ owner: req.user.userId }).sort({ createdAt: -1 });
-  res.json(items);
+  try {
+    const items = await queryDocuments(
+      COLLECTIONS.ALERTS,
+      [{ field: 'owner', operator: '==', value: req.user.userId }],
+      { field: 'createdAt', direction: 'desc' }
+    );
+    res.json(items);
+  } catch (error) {
+    console.error('Get alerts error:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch alerts',
+      ...(process.env.NODE_ENV === 'development' && {
+        details: error.message,
+        code: error.code
+      })
+    });
+  }
 });
 
 router.post('/', async (req, res) => {
-  const data = { ...req.body, owner: req.user.userId };
-  const item = await Alert.create(data);
-  res.status(201).json(item);
+  try {
+    const data = { 
+      ...req.body, 
+      owner: req.user.userId,
+      isRead: false
+    };
+    const item = await createDocument(COLLECTIONS.ALERTS, data);
+    res.status(201).json(item);
+  } catch (error) {
+    console.error('Create alert error:', error);
+    res.status(500).json({ error: 'Failed to create alert' });
+  }
 });
 
 router.patch('/:id/read', async (req, res) => {
-  const item = await Alert.findOneAndUpdate({ _id: req.params.id, owner: req.user.userId }, { isRead: true }, { new: true });
-  if (!item) return res.status(404).json({ error: 'Not found' });
-  res.json(item);
+  try {
+    const item = await getDocumentById(COLLECTIONS.ALERTS, req.params.id);
+    
+    if (!item) {
+      return res.status(404).json({ error: 'Alert not found' });
+    }
+    
+    // Check if user owns this alert
+    if (item.owner !== req.user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    const updated = await updateDocument(COLLECTIONS.ALERTS, req.params.id, { isRead: true });
+    res.json(updated);
+  } catch (error) {
+    console.error('Update alert error:', error);
+    res.status(500).json({ error: 'Failed to update alert' });
+  }
 });
 
 router.patch('/mark-all-read', async (req, res) => {
-  await Alert.updateMany({ owner: req.user.userId, isRead: false }, { isRead: true });
-  const items = await Alert.find({ owner: req.user.userId }).sort({ createdAt: -1 });
-  res.json(items);
+  try {
+    // Get all unread alerts for the user
+    const unreadAlerts = await queryDocuments(
+      COLLECTIONS.ALERTS,
+      [
+        { field: 'owner', operator: '==', value: req.user.userId },
+        { field: 'isRead', operator: '==', value: false }
+      ]
+    );
+    
+    // Update each alert
+    const updatePromises = unreadAlerts.map(alert => 
+      updateDocument(COLLECTIONS.ALERTS, alert.id, { isRead: true })
+    );
+    
+    await Promise.all(updatePromises);
+    
+    // Get all alerts after update
+    const items = await queryDocuments(
+      COLLECTIONS.ALERTS,
+      [{ field: 'owner', operator: '==', value: req.user.userId }],
+      { field: 'createdAt', direction: 'desc' }
+    );
+    
+    res.json(items);
+  } catch (error) {
+    console.error('Mark all read error:', error);
+    res.status(500).json({ error: 'Failed to mark alerts as read' });
+  }
 });
 
 router.delete('/:id', async (req, res) => {
-  const result = await Alert.deleteOne({ _id: req.params.id, owner: req.user.userId });
-  if (result.deletedCount === 0) return res.status(404).json({ error: 'Not found' });
-  res.json({ ok: true });
+  try {
+    const item = await getDocumentById(COLLECTIONS.ALERTS, req.params.id);
+    
+    if (!item) {
+      return res.status(404).json({ error: 'Alert not found' });
+    }
+    
+    // Check if user owns this alert
+    if (item.owner !== req.user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    await deleteDocument(COLLECTIONS.ALERTS, req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete alert error:', error);
+    res.status(500).json({ error: 'Failed to delete alert' });
+  }
 });
 
 export default router;

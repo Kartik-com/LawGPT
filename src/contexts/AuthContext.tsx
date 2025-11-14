@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { getApiUrl } from '@/lib/api';
 
 interface User {
   id: string;
@@ -53,7 +54,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const storedUser = localStorage.getItem('legal_pro_user');
         if (storedUser) {
           // Verify the stored user with the server
-          const res = await fetch('/api/auth/me', { credentials: 'include' });
+          const res = await fetch(getApiUrl('/api/auth/me'), { credentials: 'include' });
           if (res.ok) {
             const data = await res.json();
             setUser(data.user);
@@ -67,7 +68,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         } else {
           // No stored user, check if server has a valid session
-          const res = await fetch('/api/auth/me', { credentials: 'include' });
+          const res = await fetch(getApiUrl('/api/auth/me'), { credentials: 'include' });
           if (res.ok) {
             const data = await res.json();
             setUser(data.user);
@@ -95,7 +96,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -127,7 +128,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (userData: RegisterData): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(getApiUrl('/api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -150,6 +151,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         firm: data.user.firm,
       };
       
+      // Token is automatically set in cookie by backend
+      // Store user in localStorage
       setUser(newUser);
       localStorage.setItem('legal_pro_user', JSON.stringify(newUser));
       setIsLoading(false);
@@ -162,7 +165,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch(getApiUrl('/api/auth/logout'), { method: 'POST', credentials: 'include' });
     } catch (error) {
       console.error('Logout request failed:', error);
     } finally {

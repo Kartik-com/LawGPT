@@ -1,21 +1,47 @@
 import express from 'express';
-import Client from '../models/Client.js';
 import { requireAuth } from '../middleware/auth.js';
 import { logActivity } from '../middleware/activityLogger.js';
+import { 
+  createDocument, 
+  getDocumentById, 
+  updateDocument, 
+  deleteDocument,
+  queryDocuments,
+  COLLECTIONS 
+} from '../services/firestore.js';
 
 const router = express.Router();
 
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const clients = await Client.find({ owner: req.user.userId }).sort({ createdAt: -1 });
-  res.json(clients);
+  try {
+    const clients = await queryDocuments(
+      COLLECTIONS.CLIENTS,
+      [{ field: 'owner', operator: '==', value: req.user.userId }],
+      { field: 'createdAt', direction: 'desc' }
+    );
+    res.json(clients);
+  } catch (error) {
+    console.error('Get clients error:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch clients',
+      ...(process.env.NODE_ENV === 'development' && {
+        details: error.message,
+        code: error.code
+      })
+    });
+  }
 });
 
 router.post('/', async (req, res) => {
   try {
     const data = { ...req.body, owner: req.user.userId };
-    const client = await Client.create(data);
+    const client = await createDocument(COLLECTIONS.CLIENTS, data);
     
     // Log activity
     await logActivity(
@@ -23,7 +49,7 @@ router.post('/', async (req, res) => {
       'client_registered',
       `New client ${client.name} registered`,
       'client',
-      client._id,
+      client.id,
       {
         clientName: client.name,
         email: client.email,
@@ -40,8 +66,12 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
-    const client = await Client.findOneAndUpdate({ _id: req.params.id, owner: req.user.userId }, req.body, { new: true });
-    if (!client) return res.status(404).json({ error: 'Not found' });
+    const existing = await getDocumentById(COLLECTIONS.CLIENTS, req.params.id);
+    if (!existing || existing.owner !== req.user.userId) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    
+    const client = await updateDocument(COLLECTIONS.CLIENTS, req.params.id, req.body);
     
     // Log activity
     await logActivity(
@@ -49,7 +79,7 @@ router.put('/:id', async (req, res) => {
       'client_updated',
       `Client ${client.name} information updated`,
       'client',
-      client._id,
+      client.id,
       {
         clientName: client.name,
         email: client.email
@@ -64,9 +94,18 @@ router.put('/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  const result = await Client.deleteOne({ _id: req.params.id, owner: req.user.userId });
-  if (result.deletedCount === 0) return res.status(404).json({ error: 'Not found' });
-  res.json({ ok: true });
+  try {
+    const existing = await getDocumentById(COLLECTIONS.CLIENTS, req.params.id);
+    if (!existing || existing.owner !== req.user.userId) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    
+    await deleteDocument(COLLECTIONS.CLIENTS, req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete client error:', error);
+    res.status(500).json({ error: 'Failed to delete client' });
+  }
 });
 
 export default router;
