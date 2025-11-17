@@ -23,14 +23,27 @@ const app = express();
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:8080').split(',');
+    const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:8080';
+    const allowedOrigins = corsOrigin.split(',').map(o => o.trim()).filter(o => o.length > 0);
+    
+    // Log for debugging
+    console.log('CORS check - Origin:', origin);
+    console.log('CORS check - Allowed origins:', allowedOrigins);
+    
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+    if (!origin) {
+      console.log('CORS: Allowing request with no origin');
+      return callback(null, true);
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      console.log('CORS: Allowing origin:', origin);
       callback(null, true);
     } else {
       console.warn('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
+      console.warn('CORS allowed origins:', allowedOrigins);
+      callback(new Error(`Not allowed by CORS. Origin: ${origin} not in allowed list.`));
     }
   },
   credentials: true,
@@ -94,12 +107,34 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// 404 handler for undefined routes
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.path} not found`,
+    availableEndpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      cases: '/api/cases',
+      clients: '/api/clients',
+      documents: '/api/documents',
+      invoices: '/api/invoices',
+      hearings: '/api/hearings',
+      alerts: '/api/alerts',
+      timeEntries: '/api/time-entries',
+      dashboard: '/api/dashboard',
+      legalSections: '/api/legal-sections'
+    }
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 
 // Initialize Firebase (required for Firestore)
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 
       process.env.FIREBASE_SERVICE_ACCOUNT || 
+      process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 ||
       (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL)) {
     initializeFirebase();
     console.log('Firebase initialized successfully');
