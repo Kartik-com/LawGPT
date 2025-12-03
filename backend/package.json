@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "node --env-file=.env --watch index.js",
-    "start": "node --env-file=.env index.js",
+    "start": "node -r dotenv/config index.js",
     "check:firebase": "node check-firebase-config.js",
     "test:env": "node --test tests/env.test.js",
     "seed:legal": "node src/scripts/seedLegalSections.js",
