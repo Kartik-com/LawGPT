@@ -347,7 +347,7 @@ const Calendar = () => {
           <h1 className="text-3xl font-bold">Legal Calendar</h1>
           <p className="text-muted-foreground">Court hearings and important dates</p>
         </div>
-        <Button onClick={openCreateModal} disabled={!selectedDate}>
+        <Button onClick={openCreateModal} >
           <Plus className="mr-2 h-4 w-4" />
           Schedule Hearing
         </Button>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,9 @@ const Signup = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { isAuthenticated, register } = useAuth();
+
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
@@ -35,7 +37,7 @@ const Signup = () => {
 
   const validateForm = () => {
     const { name, email, password, confirmPassword } = formData;
-    
+
     if (!name.trim()) {
       toast({
         title: "Validation Error",
@@ -78,9 +80,9 @@ const Signup = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     setIsSubmitting(true);
 
     try {
@@ -96,9 +98,9 @@ const Signup = () => {
       if (result.success) {
         toast({
           title: "Registration Successful",
-          description: "Welcome to LegalPro! You are now logged in.",
+          description: "Please check your email to verify your account.",
         });
-        // Navigate to dashboard - the auth context will handle the redirect
+        navigate('/verification-pending', { state: { email: formData.email } });
       } else {
         toast({
           title: "Registration Failed",
@@ -247,9 +249,9 @@ const Signup = () => {
               </div>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full" 
+            <Button
+              type="submit"
+              className="w-full"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
@@ -262,7 +264,7 @@ const Signup = () => {
               )}
             </Button>
           </form>
-          
+
           <div className="mt-4 text-center text-sm">
             Already have an account? <Link to="/login" className="text-primary hover:underline font-medium">Sign in</Link>
           </div>

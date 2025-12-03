@@ -35,6 +35,7 @@ interface User {
   phone?: string;
   address?: string;
   bio?: string;
+  emailVerified?: boolean;
   notifications?: NotificationSettings;
   preferences?: PreferenceSettings;
   security?: SecuritySettings;
@@ -46,6 +47,8 @@ interface AuthContextType {
   register: (userData: RegisterData) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  verifyEmail: (token: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  resendVerificationEmail: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   isLoading: boolean;
   isAuthenticated: boolean;
 }
@@ -145,15 +148,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         credentials: 'include',
         body: JSON.stringify(userData),
       });
-      
+
       const data = await res.json();
-      
+
       if (!res.ok) {
         persistUser(null);
         setIsLoading(false);
         return { success: false, error: data.error || 'Registration failed' };
       }
-      
+
       persistUser(data.user as User);
       setIsLoading(false);
       return { success: true };
@@ -179,12 +182,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const verifyEmail = async (token: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(getApiUrl('/api/auth/verify-email'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Verification failed' };
+      }
+
+      return { success: true, message: data.message };
+    } catch (error) {
+      return { success: false, error: 'Network error occurred' };
+    }
+  };
+
+  const resendVerificationEmail = async (email: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(getApiUrl('/api/auth/resend-verification'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to send email' };
+      }
+
+      return { success: true, message: data.message };
+    } catch (error) {
+      return { success: false, error: 'Network error occurred' };
+    }
+  };
+
   const value = {
     user,
     login,
     register,
     logout,
     refreshUser,
+    verifyEmail,
+    resendVerificationEmail,
     isLoading,
     isAuthenticated: !!user
   };

@@ -22,6 +22,8 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import EmailVerificationPending from "./pages/EmailVerificationPending";
+import EmailVerificationSuccess from "./pages/EmailVerificationSuccess";
 
 // Import Layout
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -51,7 +53,9 @@ const App = () => (
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
-                
+                <Route path="/verify-email" element={<EmailVerificationSuccess />} />
+                <Route path="/verification-pending" element={<EmailVerificationPending />} />
+
                 {/* Protected Dashboard Routes */}
                 <Route path="/dashboard" element={<DashboardLayout />}>
                   <Route index element={<Dashboard />} />
@@ -63,7 +67,7 @@ const App = () => (
                   <Route path="documents" element={<Documents />} />
                   <Route path="settings" element={<Settings />} />
                 </Route>
-                
+
                 {/* Catch All Route */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

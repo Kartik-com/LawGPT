@@ -13,10 +13,13 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
   const { toast } = useToast();
 
   if (isAuthenticated) {
+    if (user && user.emailVerified === false) {
+      return <Navigate to="/verification-pending" state={{ email: user.email }} replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -100,9 +103,9 @@ const Login = () => {
                 </Button>
               </div>
             </div>
-            <Button 
-              type="submit" 
-              className="w-full" 
+            <Button
+              type="submit"
+              className="w-full"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
