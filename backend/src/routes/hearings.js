@@ -1,14 +1,19 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { logActivity } from '../middleware/activityLogger.js';
-import { 
-  createDocument, 
-  getDocumentById, 
-  updateDocument, 
+import {
+  createDocument,
+  getDocumentById,
+  updateDocument,
   deleteDocument,
   queryDocuments,
-  COLLECTIONS 
+  COLLECTIONS
 } from '../services/firestore.js';
+import {
+  checkHearingConflicts,
+  computeHearingTimes,
+  validateHearingData
+} from '../utils/conflictDetection.js';
 
 const router = express.Router();
 
@@ -25,6 +30,59 @@ const isBeforeToday = (date) => {
   startOfToday.setHours(0, 0, 0, 0);
   return date < startOfToday;
 };
+
+// Check for hearing conflicts
+router.post('/check-conflict', async (req, res) => {
+  try {
+    const { startAt, endAt, timezone, resourceScope, excludeHearingId } = req.body;
+
+    // Validate required fields
+    if (!startAt || !endAt) {
+      return res.status(400).json({
+        error: 'VALIDATION_ERROR',
+        message: 'startAt and endAt are required'
+      });
+    }
+
+    // Parse dates
+    const start = new Date(startAt);
+    const end = new Date(endAt);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({
+        error: 'VALIDATION_ERROR',
+        message: 'Invalid date format'
+      });
+    }
+
+    if (start >= end) {
+      return res.status(400).json({
+        error: 'VALIDATION_ERROR',
+        message: 'endAt must be after startAt'
+      });
+    }
+
+    // Check for conflicts
+    const conflicts = await checkHearingConflicts(
+      req.user.userId,
+      start,
+      end,
+      resourceScope || {},
+      excludeHearingId
+    );
+
+    res.json({
+      hasConflict: conflicts.length > 0,
+      conflicts
+    });
+  } catch (error) {
+    console.error('Check conflict error:', error);
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to check conflicts'
+    });
+  }
+});
 
 // Get all hearings for a specific case
 router.get('/case/:caseId', async (req, res) => {
@@ -52,7 +110,7 @@ router.get('/', async (req, res) => {
       [{ field: 'owner', operator: '==', value: req.user.userId }],
       { field: 'hearingDate', direction: 'desc' }
     );
-    
+
     // Populate case info
     const hearingsWithCases = await Promise.all(hearings.map(async (hearing) => {
       if (hearing.caseId) {
@@ -72,7 +130,7 @@ router.get('/', async (req, res) => {
       }
       return hearing;
     }));
-    
+
     res.json(hearingsWithCases);
   } catch (error) {
     console.error('Get all hearings error:', error);
@@ -80,7 +138,7 @@ router.get('/', async (req, res) => {
       code: error.code,
       message: error.message
     });
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch hearings',
       ...(process.env.NODE_ENV === 'development' && {
         details: error.message,
@@ -94,10 +152,10 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const hearing = await getDocumentById(COLLECTIONS.HEARINGS, req.params.id);
-    
+
     if (!hearing) return res.status(404).json({ error: 'Hearing not found' });
     if (hearing.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
-    
+
     // Populate case info
     if (hearing.caseId) {
       const case_ = await getDocumentById(COLLECTIONS.CASES, hearing.caseId);
@@ -106,7 +164,7 @@ router.get('/:id', async (req, res) => {
         clientName: case_.clientName
       } : hearing.caseId;
     }
-    
+
     res.json(hearing);
   } catch (error) {
     console.error('Get hearing error:', error);
@@ -124,7 +182,7 @@ router.post('/', async (req, res) => {
     if (isBeforeToday(normalizedHearingDate)) {
       return res.status(400).json({ error: 'Hearing date cannot be in the past' });
     }
-    
+
     let normalizedNextHearingDate = null;
     if (req.body.nextHearingDate) {
       normalizedNextHearingDate = normalizeDateInput(req.body.nextHearingDate);
@@ -135,21 +193,94 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: 'Next hearing date cannot be in the past' });
       }
     }
-    
-    const data = { 
-      ...req.body, 
+
+    // Compute startAt and endAt from hearingDate, hearingTime, timezone
+    const timezone = req.body.timezone || 'Asia/Kolkata';
+    const hearingTime = req.body.hearingTime || '10:00';
+    const duration = req.body.duration || 60;
+
+    const { startAt, endAt } = computeHearingTimes(
+      normalizedHearingDate,
+      hearingTime,
+      timezone,
+      duration
+    );
+
+    const data = {
+      ...req.body,
       owner: req.user.userId,
-      hearingDate: normalizedHearingDate
+      hearingDate: normalizedHearingDate,
+      timezone,
+      startAt,
+      endAt,
+      duration
     };
-    
+
     if (normalizedNextHearingDate) {
       data.nextHearingDate = normalizedNextHearingDate;
     } else if (req.body.nextHearingDate === null) {
       data.nextHearingDate = null;
     }
-    
+
+    // Check for conflicts (unless override is explicitly allowed)
+    const override = req.body.override === true;
+    const conflicts = await checkHearingConflicts(
+      req.user.userId,
+      startAt,
+      endAt,
+      req.body.resourceScope || {},
+      null // No excludeHearingId for new hearings
+    );
+
+    if (conflicts.length > 0 && !override) {
+      // Return conflict error
+      return res.status(409).json({
+        error: 'CONFLICT',
+        message: 'Hearing conflicts with existing schedules',
+        conflicts: conflicts.map(c => ({
+          hearingId: c.hearingId,
+          caseNumber: c.caseNumber,
+          startAt: c.startAt.toISOString(),
+          endAt: c.endAt.toISOString(),
+          conflictReason: c.conflictReason
+        }))
+      });
+    }
+
+    // If override is requested, validate and record it
+    if (override) {
+      if (!req.body.overrideReason || !req.body.overrideReason.trim()) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: 'Override reason is required when forcing a conflicting hearing'
+        });
+      }
+
+      data.conflictOverride = {
+        allowed: true,
+        reason: req.body.overrideReason.trim(),
+        overriddenBy: req.user.userId,
+        overriddenAt: new Date(),
+        conflictingHearings: conflicts.map(c => c.hearingId)
+      };
+
+      // Log override activity
+      await logActivity(
+        req.user.userId,
+        'hearing_conflict_override',
+        `Hearing scheduled despite ${conflicts.length} conflict(s): ${req.body.overrideReason}`,
+        'hearing',
+        null,
+        {
+          conflicts: conflicts.length,
+          reason: req.body.overrideReason,
+          conflictingHearings: conflicts.map(c => c.hearingId)
+        }
+      );
+    }
+
     const hearing = await createDocument(COLLECTIONS.HEARINGS, data);
-    
+
     // Log activity
     const hearingDate = hearing.hearingDate?.toDate ? hearing.hearingDate.toDate() : new Date(hearing.hearingDate);
     await logActivity(
@@ -162,10 +293,11 @@ router.post('/', async (req, res) => {
         caseId: hearing.caseId,
         hearingDate: hearingDate,
         hearingType: hearing.hearingType,
-        status: hearing.status
+        status: hearing.status,
+        hasConflictOverride: override
       }
     );
-    
+
     res.status(201).json(hearing);
   } catch (error) {
     console.error('Create hearing error:', error);
@@ -179,10 +311,10 @@ router.put('/:id', async (req, res) => {
     const original = await getDocumentById(COLLECTIONS.HEARINGS, req.params.id);
     if (!original) return res.status(404).json({ error: 'Hearing not found' });
     if (original.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
-    
+
     const updates = { ...req.body };
     const resultingStatus = updates.status || original.status;
-    
+
     if (updates.hearingDate) {
       const normalized = normalizeDateInput(updates.hearingDate);
       if (!normalized) {
@@ -193,7 +325,7 @@ router.put('/:id', async (req, res) => {
       }
       updates.hearingDate = normalized;
     }
-    
+
     if (updates.nextHearingDate !== undefined) {
       if (!updates.nextHearingDate) {
         updates.nextHearingDate = null;
@@ -208,9 +340,92 @@ router.put('/:id', async (req, res) => {
         updates.nextHearingDate = normalizedNext;
       }
     }
-    
+
+    // Recompute startAt/endAt if date, time, timezone, or duration changed
+    const dateChanged = updates.hearingDate !== undefined;
+    const timeChanged = updates.hearingTime !== undefined;
+    const timezoneChanged = updates.timezone !== undefined;
+    const durationChanged = updates.duration !== undefined;
+
+    if (dateChanged || timeChanged || timezoneChanged || durationChanged) {
+      const hearingDate = updates.hearingDate || original.hearingDate;
+      const hearingTime = updates.hearingTime || original.hearingTime || '10:00';
+      const timezone = updates.timezone || original.timezone || 'Asia/Kolkata';
+      const duration = updates.duration || original.duration || 60;
+
+      const { startAt, endAt } = computeHearingTimes(
+        hearingDate,
+        hearingTime,
+        timezone,
+        duration
+      );
+
+      updates.startAt = startAt;
+      updates.endAt = endAt;
+      updates.timezone = timezone;
+      updates.duration = duration;
+    }
+
+    // Check for conflicts if time-related fields changed
+    if (updates.startAt && updates.endAt) {
+      const override = req.body.override === true;
+      const conflicts = await checkHearingConflicts(
+        req.user.userId,
+        updates.startAt,
+        updates.endAt,
+        updates.resourceScope || original.resourceScope || {},
+        req.params.id // Exclude this hearing from conflict check
+      );
+
+      if (conflicts.length > 0 && !override) {
+        return res.status(409).json({
+          error: 'CONFLICT',
+          message: 'Hearing update conflicts with existing schedules',
+          conflicts: conflicts.map(c => ({
+            hearingId: c.hearingId,
+            caseNumber: c.caseNumber,
+            startAt: c.startAt.toISOString(),
+            endAt: c.endAt.toISOString(),
+            conflictReason: c.conflictReason
+          }))
+        });
+      }
+
+      // If override is requested, validate and record it
+      if (override) {
+        if (!req.body.overrideReason || !req.body.overrideReason.trim()) {
+          return res.status(400).json({
+            error: 'VALIDATION_ERROR',
+            message: 'Override reason is required when forcing a conflicting hearing'
+          });
+        }
+
+        updates.conflictOverride = {
+          allowed: true,
+          reason: req.body.overrideReason.trim(),
+          overriddenBy: req.user.userId,
+          overriddenAt: new Date(),
+          conflictingHearings: conflicts.map(c => c.hearingId)
+        };
+
+        // Log override activity
+        await logActivity(
+          req.user.userId,
+          'hearing_conflict_override',
+          `Hearing updated despite ${conflicts.length} conflict(s): ${req.body.overrideReason}`,
+          'hearing',
+          req.params.id,
+          {
+            conflicts: conflicts.length,
+            reason: req.body.overrideReason,
+            conflictingHearings: conflicts.map(c => c.hearingId)
+          }
+        );
+      }
+    }
+
     const hearing = await updateDocument(COLLECTIONS.HEARINGS, req.params.id, updates);
-    
+
     // Populate case info
     if (hearing.caseId) {
       const case_ = await getDocumentById(COLLECTIONS.CASES, hearing.caseId);
@@ -219,7 +434,7 @@ router.put('/:id', async (req, res) => {
         clientName: case_.clientName
       } : hearing.caseId;
     }
-    
+
     // Log activity
     const hearingDate = hearing.hearingDate?.toDate ? hearing.hearingDate.toDate() : new Date(hearing.hearingDate);
     const caseNumber = typeof hearing.caseId === 'object' ? hearing.caseId?.caseNumber : hearing.caseId;
@@ -236,7 +451,7 @@ router.put('/:id', async (req, res) => {
         status: hearing.status
       }
     );
-    
+
     res.json(hearing);
   } catch (error) {
     console.error('Update hearing error:', error);
@@ -248,17 +463,17 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const hearing = await getDocumentById(COLLECTIONS.HEARINGS, req.params.id);
-    
+
     if (!hearing) {
       return res.status(404).json({ error: 'Hearing not found' });
     }
-    
+
     if (hearing.owner !== req.user.userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    
+
     await deleteDocument(COLLECTIONS.HEARINGS, req.params.id);
-    
+
     // Log activity
     const hearingDate = hearing.hearingDate?.toDate ? hearing.hearingDate.toDate() : new Date(hearing.hearingDate);
     await logActivity(
@@ -273,7 +488,7 @@ router.delete('/:id', async (req, res) => {
         hearingType: hearing.hearingType
       }
     );
-    
+
     res.json({ ok: true });
   } catch (error) {
     console.error('Delete hearing error:', error);
@@ -288,12 +503,12 @@ router.get('/today/list', async (req, res) => {
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     const allHearings = await queryDocuments(
       COLLECTIONS.HEARINGS,
       [{ field: 'owner', operator: '==', value: req.user.userId }]
     );
-    
+
     const todaysHearings = allHearings.filter(hearing => {
       if (!hearing.hearingDate) return false;
       const hearingDate = hearing.hearingDate.toDate ? hearing.hearingDate.toDate() : new Date(hearing.hearingDate);
@@ -303,7 +518,7 @@ router.get('/today/list', async (req, res) => {
       const bTime = b.hearingTime || '';
       return aTime.localeCompare(bTime);
     });
-    
+
     // Populate case info
     const hearingsWithCases = await Promise.all(todaysHearings.map(async (hearing) => {
       if (hearing.caseId) {
@@ -318,7 +533,7 @@ router.get('/today/list', async (req, res) => {
       }
       return hearing;
     }));
-    
+
     res.json(hearingsWithCases);
   } catch (error) {
     console.error('Get today hearings error:', error);

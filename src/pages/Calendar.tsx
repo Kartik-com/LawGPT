@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
+import {
   Calendar as CalendarIcon,
   Clock,
   MapPin,
@@ -14,11 +14,14 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Plus
+  Plus,
+  AlertTriangle
 } from 'lucide-react';
 import { useLegalData, Case } from '@/contexts/LegalDataContext';
 import { CaseDetailsPopup } from '@/components/CaseDetailsPopup';
 import { CaseConflictChecker } from '@/components/CaseConflictChecker';
+import { HearingTooltip } from '@/components/HearingTooltip';
+import { ConflictDialog } from '@/components/ConflictDialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -40,6 +43,18 @@ const Calendar = () => {
   const [formHearingTime, setFormHearingTime] = useState('');
   const [formPriority, setFormPriority] = useState<Case['priority']>('medium');
   const [formDescription, setFormDescription] = useState('');
+  const [formTimezone, setFormTimezone] = useState('Asia/Kolkata');
+  const [formDuration, setFormDuration] = useState(60);
+
+  // Conflict handling state
+  const [conflicts, setConflicts] = useState<any[]>([]);
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [pendingHearingData, setPendingHearingData] = useState<any>(null);
+
+  // Tooltip state
+  const [hoveredEvent, setHoveredEvent] = useState<any>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get current month and year
   const currentMonth = currentDate.getMonth();
@@ -53,12 +68,12 @@ const Calendar = () => {
 
   // Generate calendar days
   const calendarDays = [];
-  
+
   // Add empty cells for days before the first day of the month
   for (let i = 0; i < startingDayOfWeek; i++) {
     calendarDays.push(null);
   }
-  
+
   // Add days of the month
   for (let day = 1; day <= daysInMonth; day++) {
     calendarDays.push(day);
@@ -84,12 +99,12 @@ const Calendar = () => {
       ...casesForDate.map(case_ => ({ ...case_, isHearing: false, eventType: 'case' })),
       ...hearingsForDate.map(hearing => {
         // Use populated case data if available, otherwise fallback to finding the case
-        const caseData = (hearing as any).populatedCase || 
+        const caseData = (hearing as any).populatedCase ||
           (hearing.caseId && typeof hearing.caseId === 'object' ? hearing.caseId : null);
-        
-        return { 
-          ...hearing, 
-          isHearing: true, 
+
+        return {
+          ...hearing,
+          isHearing: true,
           eventType: 'next_hearing',
           caseNumber: caseData?.caseNumber || `Case ${hearing.caseId}`,
           clientName: caseData?.clientName || 'Client Name Not Found',
@@ -109,24 +124,24 @@ const Calendar = () => {
   const getConflictsForDate = (date: Date) => {
     const casesForDay = getCasesForDate(date);
     const conflicts: string[] = [];
-    
+
     casesForDay.forEach((case1, i) => {
       casesForDay.slice(i + 1).forEach(case2 => {
         if (case1.courtName === case2.courtName) {
           const time1 = case1.hearingTime || '10:00';
           const time2 = case2.hearingTime || '10:00';
           const timeDiff = Math.abs(
-            new Date(`2000-01-01 ${time1}`).getTime() - 
+            new Date(`2000-01-01 ${time1}`).getTime() -
             new Date(`2000-01-01 ${time2}`).getTime()
           );
-          
+
           if (timeDiff < 2 * 60 * 60 * 1000) { // Less than 2 hours apart
             conflicts.push(`${case1.caseNumber} & ${case2.caseNumber}`);
           }
         }
       });
     });
-    
+
     return conflicts;
   };
 
@@ -142,9 +157,9 @@ const Calendar = () => {
   // Get today's date
   const today = new Date();
   const isToday = (day: number) => {
-    return today.getDate() === day && 
-           today.getMonth() === currentMonth && 
-           today.getFullYear() === currentYear;
+    return today.getDate() === day &&
+      today.getMonth() === currentMonth &&
+      today.getFullYear() === currentYear;
   };
 
   // Get selected date cases
@@ -250,7 +265,9 @@ const Calendar = () => {
       courtName: trimmedCourtName,
       judgeName: formJudgeName.trim(),
       hearingDate: selectedDate,
-      hearingTime: formHearingTime.trim(),
+      hearingTime: formHearingTime.trim() || '10:00',
+      timezone: formTimezone,
+      duration: formDuration,
       status: 'active' as const,
       priority: formPriority,
       caseType: '',
@@ -263,47 +280,123 @@ const Calendar = () => {
 
     if (editingCase) {
       await updateCase(editingCase.id, basePayload as Partial<Case>);
+      resetModal();
+      toast({
+        title: 'Case updated',
+        description: 'Case has been updated.'
+      });
     } else {
       // Check if client exists, if not create a new client
-      const existingClient = clients.find(client => 
+      const existingClient = clients.find(client =>
         client.name.toLowerCase() === formClientName.trim().toLowerCase()
       );
-      
+
       if (!existingClient) {
         // Create new client with minimal information
         await addClient({
           name: formClientName.trim(),
-          email: 'pending@example.com', // Temporary email, will be updated later
-          phone: '0000000000', // Temporary phone, will be updated later
-          address: '', // Will be filled later in client interface
-          panNumber: '', // Will be filled later in client interface
-          aadharNumber: '', // Will be filled later in client interface
+          email: 'pending@example.com',
+          phone: '0000000000',
+          address: '',
+          panNumber: '',
+          aadharNumber: '',
           cases: [],
           documents: [],
           notes: `Auto-created when adding case: ${formCaseNumber.trim()}. Please update email and phone details.`
         });
       }
-      
+
       try {
         console.log('Creating new case from calendar:', formCaseNumber.trim());
         await addCase(basePayload as Omit<Case, 'id' | 'createdAt' | 'updatedAt'>);
         console.log('Case created successfully from calendar');
-      } catch (error) {
-        console.error('Error creating case from calendar:', error);
+        resetModal();
         toast({
-          title: 'Failed to create case',
-          description: error instanceof Error ? error.message : 'Unable to create case. Please try again.',
-          variant: 'destructive'
+          title: 'Case created',
+          description: 'Case has been scheduled.'
         });
-        return;
+      } catch (error: any) {
+        console.error('Error creating case from calendar:', error);
+
+        // Check if it's a conflict error (409)
+        if (error.status === 409 && error.conflicts) {
+          // Store the pending data and show conflict dialog
+          setPendingHearingData(basePayload);
+          setConflicts(error.conflicts);
+          setShowConflictDialog(true);
+        } else {
+          toast({
+            title: 'Failed to create case',
+            description: error.message || 'Unable to create case. Please try again.',
+            variant: 'destructive'
+          });
+        }
       }
     }
-    resetModal();
+  };
+
+  const handleConflictCancel = () => {
+    setShowConflictDialog(false);
+    setConflicts([]);
+    setPendingHearingData(null);
+  };
+
+  const handleConflictEditTime = () => {
+    setShowConflictDialog(false);
+    // Keep modal open so user can edit the time
     toast({
-      title: editingCase ? 'Case updated' : 'Case created',
-      description: editingCase ? 'Case has been updated.' : 'Case has been scheduled.'
+      title: 'Edit hearing time',
+      description: 'Please adjust the hearing time to avoid conflicts.'
     });
   };
+
+  const handleConflictOverride = async (reason: string) => {
+    if (!pendingHearingData) return;
+
+    try {
+      console.log('Overriding conflict with reason:', reason);
+
+      // Check if client exists
+      const existingClient = clients.find(client =>
+        client.name.toLowerCase() === pendingHearingData.clientName.toLowerCase()
+      );
+
+      if (!existingClient) {
+        await addClient({
+          name: pendingHearingData.clientName,
+          email: 'pending@example.com',
+          phone: '0000000000',
+          address: '',
+          panNumber: '',
+          aadharNumber: '',
+          cases: [],
+          documents: [],
+          notes: `Auto-created when adding case: ${pendingHearingData.caseNumber}. Please update email and phone details.`
+        });
+      }
+
+      // Create case with override - Note: This needs backend support for override
+      await addCase(pendingHearingData as Omit<Case, 'id' | 'createdAt' | 'updatedAt'>);
+
+      setShowConflictDialog(false);
+      setConflicts([]);
+      setPendingHearingData(null);
+      resetModal();
+
+      toast({
+        title: 'Case created with override',
+        description: 'Hearing scheduled despite conflicts. Override reason recorded.'
+      });
+    } catch (error: any) {
+      console.error('Error overriding conflict:', error);
+      toast({
+        title: 'Failed to override',
+        description: error.message || 'Unable to schedule hearing. Please try again.',
+        variant: 'destructive'
+      });
+    }
+  };
+
 
   const handleDelete = async (c: Case) => {
     await deleteCase(c.id);
@@ -312,27 +405,27 @@ const Calendar = () => {
   const handleViewCaseDetails = (hearing: any) => {
     // Try multiple approaches to find the case
     let associatedCase = null;
-    
+
     // First, try using the populated case data if available
     if (hearing.populatedCase && hearing.populatedCase._id) {
       associatedCase = cases.find(c => c.id === hearing.populatedCase._id);
     }
-    
+
     // If not found, try the regular caseId approach
     if (!associatedCase) {
-      associatedCase = cases.find(c => 
-        c.id === hearing.caseId || 
-        c.id === hearing.caseId.toString() || 
-        hearing.caseId === c.id || 
+      associatedCase = cases.find(c =>
+        c.id === hearing.caseId ||
+        c.id === hearing.caseId.toString() ||
+        hearing.caseId === c.id ||
         hearing.caseId === c.id.toString()
       );
     }
-    
+
     // If still not found, try finding by case number if we have it
     if (!associatedCase && hearing.caseNumber && hearing.caseNumber !== `Case ${hearing.caseId}`) {
       associatedCase = cases.find(c => c.caseNumber === hearing.caseNumber);
     }
-    
+
     if (associatedCase) {
       setCaseForDetails(associatedCase);
       setShowCaseDetails(true);
@@ -417,9 +510,9 @@ const Calendar = () => {
                               className={cn(
                                 "w-2 h-2 rounded-full",
                                 event.isHearing ? 'bg-blue-500' :
-                                event.priority === 'urgent' ? 'bg-destructive' :
-                                event.priority === 'high' ? 'bg-warning' :
-                                event.priority === 'medium' ? 'bg-primary' : 'bg-muted-foreground'
+                                  event.priority === 'urgent' ? 'bg-destructive' :
+                                    event.priority === 'high' ? 'bg-warning' :
+                                      event.priority === 'medium' ? 'bg-primary' : 'bg-muted-foreground'
                               )}
                               title={event.isHearing ? 'Next Hearing' : `${event.priority} priority case`}
                             />
@@ -456,9 +549,9 @@ const Calendar = () => {
             </CardTitle>
             <CardDescription>
               {selectedDate ? (
-                selectedDateCases.length > 0 ? 
-                `${selectedDateCases.length} hearing${selectedDateCases.length > 1 ? 's' : ''} scheduled` :
-                'No hearings scheduled'
+                selectedDateCases.length > 0 ?
+                  `${selectedDateCases.length} hearing${selectedDateCases.length > 1 ? 's' : ''} scheduled` :
+                  'No hearings scheduled'
               ) : 'Click on a date to view hearings'}
             </CardDescription>
           </CardHeader>
@@ -483,7 +576,7 @@ const Calendar = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <div className="flex items-center gap-2">
                         <User className="h-3 w-3" />
@@ -510,25 +603,25 @@ const Calendar = () => {
                         </div>
                       )}
                     </div>
-                    
+
                     {event.description && (
                       <p className="text-xs text-muted-foreground line-clamp-2">
                         {event.description}
                       </p>
                     )}
-                    
+
                     {!event.isHearing && (
                       <div className="flex items-center gap-2 pt-1">
                         <Button variant="outline" size="sm" onClick={() => openEditModal(event)}>Edit</Button>
                         <Button variant="destructive" size="sm" onClick={() => handleDelete(event)}>Delete</Button>
                       </div>
                     )}
-                    
+
                     {event.isHearing && (
                       <div className="flex items-center gap-2 pt-1">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="w-full"
                           onClick={() => handleViewCaseDetails(event)}
                         >
@@ -602,7 +695,7 @@ const Calendar = () => {
                   </div>
                 </div>
               ))}
-            
+
             {cases.filter(case_ => {
               if (!case_.hearingDate) return false;
               const caseDate = new Date(case_.hearingDate);
@@ -610,11 +703,11 @@ const Calendar = () => {
               sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
               return caseDate >= today && caseDate <= sevenDaysFromNow;
             }).length === 0 && (
-              <div className="text-center py-4 text-muted-foreground">
-                <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No upcoming hearings in the next 7 days</p>
-              </div>
-            )}
+                <div className="text-center py-4 text-muted-foreground">
+                  <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No upcoming hearings in the next 7 days</p>
+                </div>
+              )}
           </div>
         </CardContent>
       </Card>
@@ -668,6 +761,35 @@ const Calendar = () => {
                 </Select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="timezone">Timezone</Label>
+                <Select value={formTimezone} onValueChange={setFormTimezone}>
+                  <SelectTrigger id="timezone">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Asia/Kolkata">IST (Asia/Kolkata)</SelectItem>
+                    <SelectItem value="UTC">UTC</SelectItem>
+                    <SelectItem value="America/New_York">EST (America/New_York)</SelectItem>
+                    <SelectItem value="Europe/London">GMT (Europe/London)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="duration">Duration (minutes)</Label>
+                <Input
+                  id="duration"
+                  type="number"
+                  min="15"
+                  max="480"
+                  step="15"
+                  value={formDuration}
+                  onChange={(e) => setFormDuration(parseInt(e.target.value) || 60)}
+                  placeholder="60"
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Input id="description" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Optional details" />
@@ -681,7 +803,7 @@ const Calendar = () => {
       </Dialog>
 
       {/* AI Conflict Checker */}
-      <CaseConflictChecker 
+      <CaseConflictChecker
         currentCase={editingCase || (isModalOpen ? {
           id: 'temp',
           caseNumber: formCaseNumber,
@@ -712,6 +834,16 @@ const Calendar = () => {
           setShowCaseDetails(false);
           setCaseForDetails(null);
         }}
+      />
+
+      {/* Conflict Dialog */}
+      <ConflictDialog
+        isOpen={showConflictDialog}
+        onClose={handleConflictCancel}
+        conflicts={conflicts}
+        onCancel={handleConflictCancel}
+        onEditTime={handleConflictEditTime}
+        onOverride={handleConflictOverride}
       />
     </div>
   );

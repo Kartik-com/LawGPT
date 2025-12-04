@@ -135,33 +135,34 @@ interface LegalDataContextType {
   updateCase: (caseId: string, updates: Partial<Case>) => void;
   deleteCase: (caseId: string) => void;
   getCaseById: (caseId: string) => Case | undefined;
-  
+
   // Clients
   clients: Client[];
   addClient: (clientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateClient: (clientId: string, updates: Partial<Client>) => void;
   deleteClient: (clientId: string) => void;
-  
+
   // Alerts
   alerts: Alert[];
   addAlert: (alertData: Omit<Alert, 'id' | 'createdAt'>) => void;
   markAlertAsRead: (alertId: string) => void;
   deleteAlert: (alertId: string) => void;
-  
+
   // Legal Sections
   legalSections: LegalSection[];
   searchLegalSections: (query: string) => LegalSection[];
-  
+
   // Time Entries
   timeEntries: TimeEntry[];
   addTimeEntry: (entry: Omit<TimeEntry, 'id'>) => void;
 
   // Hearings
   hearings: Hearing[];
-  addHearing: (hearing: Omit<Hearing, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  updateHearing: (hearingId: string, updates: Partial<Hearing>) => void;
+  addHearing: (hearing: Omit<Hearing, 'id' | 'createdAt' | 'updatedAt'>, override?: boolean, overrideReason?: string) => Promise<void>;
+  updateHearing: (hearingId: string, updates: Partial<Hearing>, override?: boolean, overrideReason?: string) => void;
   deleteHearing: (hearingId: string) => void;
   getHearingsByCaseId: (caseId: string) => Hearing[];
+  checkHearingConflict: (startAt: Date, endAt: Date, timezone: string, resourceScope?: any, excludeHearingId?: string) => Promise<{ hasConflict: boolean; conflicts: any[] }>;
 
   // Invoices
   invoices: Invoice[];
@@ -388,7 +389,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   // Legal research
   const searchLegalSections = (query: string): LegalSection[] => {
     if (!query) return legalSections;
-    
+
     const lowerQuery = query.toLowerCase();
     return legalSections.filter(section =>
       section.sectionNumber.toLowerCase().includes(lowerQuery) ||
@@ -409,12 +410,63 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
   };
 
   // Hearing management functions
-  const addHearing = async (hearing: Omit<Hearing, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const res = await fetch(getApiUrl('/api/hearings'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(hearing) });
+  const checkHearingConflict = async (
+    startAt: Date,
+    endAt: Date,
+    timezone: string,
+    resourceScope: any = {},
+    excludeHearingId?: string
+  ) => {
+    const res = await fetch(getApiUrl('/api/hearings/check-conflict'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        timezone,
+        resourceScope,
+        excludeHearingId
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to check conflicts');
+    }
+
+    return await res.json();
+  };
+
+  const addHearing = async (
+    hearing: Omit<Hearing, 'id' | 'createdAt' | 'updatedAt'>,
+    override: boolean = false,
+    overrideReason?: string
+  ) => {
+    const payload = {
+      ...hearing,
+      override,
+      overrideReason
+    };
+
+    const res = await fetch(getApiUrl('/api/hearings'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({ error: 'Failed to create hearing' }));
+      // If it's a conflict error (409), throw with conflict details
+      if (res.status === 409) {
+        const error: any = new Error(errorData.message || 'Hearing conflicts with existing schedules');
+        error.conflicts = errorData.conflicts;
+        error.status = 409;
+        throw error;
+      }
       throw new Error(errorData.error || 'Failed to create hearing');
     }
+
     const saved = await res.json();
     const mappedHearing = mapHearingFromApi(saved);
     setHearings(prev => [...prev, mappedHearing]);
@@ -423,32 +475,32 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
 
   const updateHearing = async (hearingId: string, updates: Partial<Hearing>) => {
     try {
-      const res = await fetch(getApiUrl(`/api/hearings/${hearingId}`), { 
-        method: 'PUT', 
-        headers: { 'Content-Type': 'application/json' }, 
-        credentials: 'include', 
-        body: JSON.stringify(updates) 
+      const res = await fetch(getApiUrl(`/api/hearings/${hearingId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(updates)
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Failed to update hearing' }));
         throw new Error(errorData.error || 'Failed to update hearing');
       }
-      
+
       const saved = await res.json();
       const mappedHearing = mapHearingFromApi(saved);
-      
+
       // Update hearing in state
       setHearings(prev => {
         const hearingIndex = prev.findIndex(h => {
-          const idMatch = h.id === hearingId || 
-                         h.id === hearingId.toString() || 
-                         h.id === saved._id || 
-                         h.id === saved.id;
+          const idMatch = h.id === hearingId ||
+            h.id === hearingId.toString() ||
+            h.id === saved._id ||
+            h.id === saved.id;
           const caseIdMatch = h.caseId === saved.caseId || h.caseId === saved.caseId?.toString();
           return idMatch || (caseIdMatch && h.hearingDate === saved.hearingDate);
         });
-        
+
         if (hearingIndex !== -1) {
           const updatedHearings = [...prev];
           updatedHearings[hearingIndex] = mappedHearing;
@@ -457,7 +509,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
           return [...prev, mappedHearing];
         }
       });
-      
+
       return saved;
     } catch (error) {
       throw error;
@@ -532,6 +584,7 @@ export const LegalDataProvider: React.FC<LegalDataProviderProps> = ({ children }
     updateHearing,
     deleteHearing,
     getHearingsByCaseId,
+    checkHearingConflict,
     invoices,
     createInvoice,
     updateInvoice,
