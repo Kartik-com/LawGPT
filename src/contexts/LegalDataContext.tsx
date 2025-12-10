@@ -14,6 +14,7 @@ export interface Case {
   status: 'active' | 'pending' | 'closed' | 'won' | 'lost';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   caseType: string;
+  hearingType?: string;
   description: string;
   nextHearing?: Date;
   documents: string[];

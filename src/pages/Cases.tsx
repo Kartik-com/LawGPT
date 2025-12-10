@@ -74,6 +74,7 @@ const Cases = () => {
     status: 'active' as Case['status'],
     priority: 'medium' as Case['priority'],
     caseType: '',
+    hearingType: '',
     description: '',
     notes: ''
   });
@@ -90,6 +91,7 @@ const Cases = () => {
       status: 'active',
       priority: 'medium',
       caseType: '',
+      hearingType: '',
       description: '',
       notes: ''
     });
@@ -248,6 +250,7 @@ const Cases = () => {
           notes: trimmedNotes,
           hearingDate: formData.hearingDate ? new Date(formData.hearingDate) : undefined as unknown as Date,
           documents: [],
+          hearingType: formData.hearingType,
           alerts: []
         });
       } catch (error) {
@@ -410,6 +413,24 @@ const Cases = () => {
                       <SelectItem value="tax">Tax</SelectItem>
                       <SelectItem value="labor">Labor</SelectItem>
                       <SelectItem value="constitutional">Constitutional</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="hearingType">Hearing Type*</Label>
+                  <Select value={formData.hearingType} onValueChange={(value) => setFormData(prev => ({ ...prev, hearingType: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select hearing type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pre-trial">Pre-trial</SelectItem>
+                      <SelectItem value="Trial">Trial</SelectItem>
+                      <SelectItem value="Appeal">Appeal</SelectItem>
+                      <SelectItem value="Hearing">Hearing</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -671,6 +692,7 @@ const Cases = () => {
                       status: case_.status,
                       priority: case_.priority,
                       caseType: case_.caseType,
+                      hearingType: case_.hearingType || '',
                       description: case_.description,
                       notes: case_.notes
                     });
@@ -737,6 +759,7 @@ const Cases = () => {
           status: formData.status,
           priority: formData.priority,
           caseType: formData.caseType,
+          hearingType: formData.hearingType,
           description: formData.description,
           nextHearing: undefined,
           documents: [],

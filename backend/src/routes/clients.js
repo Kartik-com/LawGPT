@@ -80,6 +80,37 @@ router.post('/', async (req, res) => {
       req.body.aadharNumber = aadharValidation.normalized;
     }
 
+    // Check for existing client with same email
+    const existingEmail = await queryDocuments(COLLECTIONS.CLIENTS, [
+      { field: 'email', operator: '==', value: emailValidation.normalized },
+      { field: 'owner', operator: '==', value: req.user.userId }
+    ]);
+    if (existingEmail.length > 0) {
+      return res.status(400).json({ error: 'A client with this email already exists' });
+    }
+
+    // Check for existing client with same PAN (if provided)
+    if (req.body.panNumber) {
+      const existingPan = await queryDocuments(COLLECTIONS.CLIENTS, [
+        { field: 'panNumber', operator: '==', value: req.body.panNumber },
+        { field: 'owner', operator: '==', value: req.user.userId }
+      ]);
+      if (existingPan.length > 0) {
+        return res.status(400).json({ error: 'A client with this PAN number already exists' });
+      }
+    }
+
+    // Check for existing client with same Aadhar (if provided)
+    if (req.body.aadharNumber) {
+      const existingAadhar = await queryDocuments(COLLECTIONS.CLIENTS, [
+        { field: 'aadharNumber', operator: '==', value: req.body.aadharNumber },
+        { field: 'owner', operator: '==', value: req.user.userId }
+      ]);
+      if (existingAadhar.length > 0) {
+        return res.status(400).json({ error: 'A client with this Aadhar number already exists' });
+      }
+    }
+
     // Generate unique client code
     let clientCode = generateClientCode(req.body.name);
     let counter = 1;

@@ -554,11 +554,14 @@ router.post('/login', async (req, res) => {
             error: 'Password verification is not configured on the server. Please set FIREBASE_WEB_API_KEY.'
           });
         }
-        if (error.code === 'INVALID_CREDENTIALS') {
-          return res.status(401).json({ error: 'Invalid credentials' });
+        if (error.code === 'INVALID_CREDENTIALS' || error.code === 'auth/wrong-password') {
+          return res.status(401).json({ error: 'Incorrect password' });
+        }
+        if (error.code === 'auth/user-not-found') {
+          return res.status(401).json({ error: 'No account found with this email' });
         }
         console.error('Password verification failed:', error);
-        return res.status(401).json({ error: 'Invalid credentials' });
+        return res.status(401).json({ error: 'Invalid email or password' });
       }
     } else {
       return res.status(400).json({ error: 'Email and password, or ID token is required' });

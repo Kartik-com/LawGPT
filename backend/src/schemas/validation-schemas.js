@@ -3,8 +3,10 @@
  * Centralized validation logic for consistency across endpoints
  */
 
-// Case number format: CASE-YYYY-NNNNN (e.g., CASE-2024-00001)
-const CASE_NUMBER_REGEX = /^CASE-\d{4}-\d{5}$/;
+// Case number format: Flexible to support various legal formats
+// Accepts: CASE-2024-00001, CC/2024/001, WP/123/2024, etc.
+// Min 3 chars, allows alphanumeric, forward slashes, hyphens
+const CASE_NUMBER_REGEX = /^[A-Za-z0-9\-\/]{3,30}$/;
 
 // Indian mobile number: 10 digits starting with 6-9
 const MOBILE_NUMBER_REGEX = /^[6-9]\d{9}$/;
@@ -42,7 +44,7 @@ function validateCaseNumber(caseNumber) {
     if (!CASE_NUMBER_REGEX.test(trimmed)) {
         return {
             valid: false,
-            error: 'Case number must follow format CASE-YYYY-NNNNN (e.g., CASE-2024-00001)'
+            error: 'Case number format is invalid. Allowed characters: letters, numbers, hyphens, and slashes.'
         };
     }
 
