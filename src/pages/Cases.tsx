@@ -3,14 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  FileText, 
-  Calendar, 
-  User, 
-  Building, 
+import {
+  Plus,
+  Search,
+  Filter,
+  FileText,
+  Calendar,
+  User,
+  Building,
   AlertTriangle,
   CheckCircle,
   Clock,
@@ -120,7 +120,7 @@ const Cases = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const trimmedCaseNumber = formData.caseNumber.trim();
     const trimmedClientName = formData.clientName.trim();
     const trimmedCourtName = formData.courtName.trim();
@@ -194,7 +194,7 @@ const Cases = () => {
         return;
       }
     }
-    
+
     if (selectedCase) {
       // Update existing case
       updateCase(selectedCase.id, {
@@ -210,7 +210,7 @@ const Cases = () => {
       });
     } else {
       // Ensure client exists if a new one was entered
-      const existingClient = selectedClientRecord || clients.find(client => 
+      const existingClient = selectedClientRecord || clients.find(client =>
         client.name.toLowerCase() === trimmedClientName.toLowerCase()
       );
 
@@ -218,14 +218,14 @@ const Cases = () => {
         try {
           await addClient({
             name: trimmedClientName,
-            email: 'pending@example.com',
-            phone: '0000000000',
+            email: `${trimmedClientName.toLowerCase().replace(/\s+/g, '.')}@pending.update`,
+            phone: '',
             address: '',
             panNumber: '',
             aadharNumber: '',
             cases: [],
             documents: [],
-            notes: `Auto-created when adding case: ${trimmedCaseNumber}. Please update email and phone details.`
+            notes: `Auto-created when adding case: ${trimmedCaseNumber}. Please update contact details.`
           });
         } catch (error) {
           console.error('Error creating client:', error);
@@ -237,7 +237,7 @@ const Cases = () => {
           return;
         }
       }
-      
+
       try {
         await addCase({
           ...formData,
@@ -260,7 +260,7 @@ const Cases = () => {
         return;
       }
     }
-    
+
     toast({
       title: selectedCase ? 'Case updated' : 'Case created',
       description: selectedCase ? 'Case details have been updated.' : 'Case has been added successfully.'
@@ -273,12 +273,12 @@ const Cases = () => {
   // Filter cases based on search and filters
   const filteredCases = cases.filter(case_ => {
     const matchesSearch = case_.caseNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         case_.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         case_.opposingParty.toLowerCase().includes(searchTerm.toLowerCase());
-    
+      case_.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      case_.opposingParty.toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesStatus = statusFilter === 'all' || case_.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || case_.priority === priorityFilter;
-    
+
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
@@ -322,7 +322,7 @@ const Cases = () => {
           <h1 className="text-3xl font-bold">Case Management</h1>
           <p className="text-muted-foreground">Manage all your legal cases efficiently</p>
         </div>
-        
+
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
             <Button onClick={() => { setSelectedCase(null); resetForm(); }}>
@@ -337,7 +337,7 @@ const Cases = () => {
                 {selectedCase ? 'Update case information' : 'Enter the details for the new case'}
               </DialogDescription>
             </DialogHeader>
-            
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -352,7 +352,7 @@ const Cases = () => {
                 </div>
                 <div>
                   <Label htmlFor="clientSelect">Client*</Label>
-                  <Select 
+                  <Select
                     value={clientSelection.mode === 'existing' ? (clientSelection.clientId ?? '') : '__custom__'}
                     onValueChange={handleClientSelect}
                   >
@@ -419,7 +419,7 @@ const Cases = () => {
                 <div>
                   <Label htmlFor="courtName">Court Name*</Label>
                   <Select
-                    value={courtSelectValue || undefined}
+                    value={courtSelectValue}
                     onValueChange={handleCourtSelect}
                   >
                     <SelectTrigger>
@@ -594,8 +594,8 @@ const Cases = () => {
       {/* Cases Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredCases.map((case_) => (
-          <Card 
-            key={case_.id} 
+          <Card
+            key={case_.id}
             className="shadow-card-custom hover:shadow-elevated transition-shadow cursor-pointer"
             onClick={() => {
               setCaseForDetails(case_);
@@ -641,7 +641,7 @@ const Cases = () => {
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span>
-                      {new Date(case_.hearingDate).toLocaleDateString('en-IN')} 
+                      {new Date(case_.hearingDate).toLocaleDateString('en-IN')}
                       {case_.hearingTime && ` at ${case_.hearingTime}`}
                     </span>
                   </div>
@@ -652,10 +652,10 @@ const Cases = () => {
                   </p>
                 )}
               </div>
-              
+
               <div className="flex gap-2 mt-4">
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   variant="outline"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -686,8 +686,8 @@ const Cases = () => {
                 >
                   Edit
                 </Button>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   variant="outline"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -710,8 +710,8 @@ const Cases = () => {
             <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No cases found</h3>
             <p className="text-muted-foreground mb-4">
-              {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' 
-                ? 'No cases match your search criteria.' 
+              {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all'
+                ? 'No cases match your search criteria.'
                 : 'Start by adding your first case.'
               }
             </p>
@@ -724,7 +724,7 @@ const Cases = () => {
       )}
 
       {/* AI Conflict Checker */}
-      <CaseConflictChecker 
+      <CaseConflictChecker
         currentCase={selectedCase || (showAddDialog ? {
           id: 'temp',
           caseNumber: formData.caseNumber,

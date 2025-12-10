@@ -42,8 +42,8 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     // Validate required fields
-    if (!req.body.name || !req.body.email || !req.body.phone) {
-      return res.status(400).json({ error: 'Name, email, and phone are required' });
+    if (!req.body.name || !req.body.email) {
+      return res.status(400).json({ error: 'Name and email are required' });
     }
 
     // Validate email
@@ -52,10 +52,14 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: emailValidation.error });
     }
 
-    // Validate and normalize mobile number
-    const phoneValidation = validateMobileNumber(req.body.phone);
-    if (!phoneValidation.valid) {
-      return res.status(400).json({ error: phoneValidation.error });
+    // Validate and normalize mobile number (if provided)
+    let normalizedPhone = '';
+    if (req.body.phone && req.body.phone.trim()) {
+      const phoneValidation = validateMobileNumber(req.body.phone);
+      if (!phoneValidation.valid) {
+        return res.status(400).json({ error: phoneValidation.error });
+      }
+      normalizedPhone = phoneValidation.normalized;
     }
 
     // Validate PAN if provided
@@ -94,7 +98,7 @@ router.post('/', async (req, res) => {
       ...req.body,
       owner: req.user.userId,
       email: emailValidation.normalized,
-      phone: phoneValidation.normalized,
+      phone: normalizedPhone,
       clientCode
     };
     const client = await createDocument(COLLECTIONS.CLIENTS, data);
