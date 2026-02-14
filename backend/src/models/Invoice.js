@@ -8,7 +8,7 @@ const invoiceItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const invoiceSchema = new mongoose.Schema({
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   clientId: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', required: true },
   caseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Case' },
   invoiceNumber: { type: String, required: true },
@@ -27,6 +27,8 @@ const invoiceSchema = new mongoose.Schema({
   paidAt: { type: Date },
 }, { timestamps: true });
 
+// Indexes for efficient queries
+invoiceSchema.index({ owner: 1, status: 1 });
+invoiceSchema.index({ owner: 1, dueDate: 1 });
+
 export default mongoose.model('Invoice', invoiceSchema);
-
-

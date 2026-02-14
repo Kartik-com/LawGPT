@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useLegalData } from '@/contexts/LegalDataContext';
 import { useNavigate } from 'react-router-dom';
+import { NotificationDropdown } from './NotificationDropdown';
 
 export const Header = () => {
   const { user, logout } = useAuth();
@@ -32,56 +33,41 @@ export const Header = () => {
   };
 
   return (
-    <header className="flex items-center justify-between px-3 md:px-6 py-4 bg-card border-b border-border">
-      <div className="flex items-center gap-4">
+    <header className="flex items-center justify-between px-2 md:px-4 py-2 bg-card border-b border-border">
+      <div className="flex items-center gap-3">
         <SidebarTrigger className="md:hidden" />
-        <h2 className="text-sm md:text-lg font-semibold text-foreground hidden sm:block">
+        <h2 className="text-xs md:text-sm font-semibold text-foreground hidden sm:block">
           Welcome back, {user?.name}
         </h2>
-        <h2 className="text-sm font-semibold text-foreground sm:hidden">
+        <h2 className="text-xs font-semibold text-foreground sm:hidden">
           {user?.name?.split(' ')[0]}
         </h2>
       </div>
 
-      <div className="flex items-center gap-2 md:gap-4">
+      <div className="flex items-center gap-1.5 md:gap-3">
         {/* Dark Mode Toggle */}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="h-8 w-8 p-0"
+          className="h-7 w-7 p-0"
         >
           {theme === 'dark' ? (
-            <Sun className="h-4 w-4" />
+            <Sun className="h-3.5 w-3.5" />
           ) : (
-            <Moon className="h-4 w-4" />
+            <Moon className="h-3.5 w-3.5" />
           )}
         </Button>
 
-        {/* Notifications */}
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className="relative h-8 w-8 p-0"
-          onClick={() => navigate('/dashboard')}
-        >
-          <Bell className="h-4 w-4" />
-          {unreadAlerts > 0 && (
-            <Badge 
-              variant="destructive" 
-              className="absolute -top-1 -right-1 h-4 w-4 rounded-full p-0 flex items-center justify-center text-xs"
-            >
-              {unreadAlerts}
-            </Badge>
-          )}
-        </Button>
+        {/* Notifications Dropdown */}
+        <NotificationDropdown unreadCount={unreadAlerts} />
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-primary-foreground">
+            <Button variant="ghost" className="relative h-7 w-7 rounded-full">
+              <Avatar className="h-7 w-7">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                   {user?.name?.charAt(0) || 'U'}
                 </AvatarFallback>
               </Avatar>

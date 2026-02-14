@@ -1,14 +1,15 @@
 import express from 'express';
 import multer from 'multer';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth-jwt.js';
 import {
   createDocument,
   getDocumentById,
   updateDocument,
   deleteDocument,
   queryDocuments,
+  MODELS,
   COLLECTIONS
-} from '../services/firestore.js';
+} from '../services/mongodb.js';
 import { uploadToCloudinary, deleteFromCloudinary, extractPublicIdFromUrl } from '../config/cloudinary.js';
 
 const router = express.Router();
@@ -32,7 +33,7 @@ router.get('/folders', requireAuth, async (req, res) => {
     }
 
     const folders = await queryDocuments(
-      COLLECTIONS.FOLDERS,
+      MODELS.FOLDERS,
       [{ field: 'ownerId', operator: '==', value: ownerId }],
       { field: 'createdAt', direction: 'desc' }
     );
@@ -61,6 +62,22 @@ router.post('/folders', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Folder name and user authentication required' });
     }
 
+    // Check for duplicate folder name within the same parent folder
+    const foldersInParent = await queryDocuments(COLLECTIONS.FOLDERS, [
+      { field: 'ownerId', operator: '==', value: ownerId },
+      { field: 'parentId', operator: '==', value: parentId || null }
+    ]);
+
+    const duplicateName = foldersInParent.find(f =>
+      f.name.toLowerCase().trim() === name.toLowerCase().trim()
+    );
+
+    if (duplicateName) {
+      return res.status(409).json({
+        error: `A folder named "${name}" already exists in this location. Please choose a different name.`
+      });
+    }
+
     // Check for duplicate caseId if provided (each case should have only one root folder)
     if (caseId) {
       const existingFolders = await queryDocuments(COLLECTIONS.FOLDERS, [
@@ -69,8 +86,8 @@ router.post('/folders', requireAuth, async (req, res) => {
       ]);
 
       if (existingFolders.length > 0) {
-        return res.status(409).json({ 
-          error: `A folder already exists for this case. Each case can only have one folder. Please use the existing folder or update it.` 
+        return res.status(409).json({
+          error: `A folder already exists for this case. Each case can only have one folder. Please use the existing folder or update it.`
         });
       }
     }
@@ -106,8 +123,26 @@ router.put('/folders/:id', requireAuth, async (req, res) => {
     }
 
     const existing = await getDocumentById(COLLECTIONS.FOLDERS, req.params.id);
-    if (!existing || existing.ownerId !== ownerId) {
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (!existing || String(existing.ownerId) !== String(ownerId)) {
       return res.status(404).json({ error: 'Folder not found or access denied' });
+    }
+
+    // Check for duplicate folder name within the same parent folder (excluding current folder)
+    const foldersInParent = await queryDocuments(COLLECTIONS.FOLDERS, [
+      { field: 'ownerId', operator: '==', value: ownerId },
+      { field: 'parentId', operator: '==', value: existing.parentId || null }
+    ]);
+
+    const duplicateName = foldersInParent.find(f =>
+      f.id !== req.params.id &&
+      f.name.toLowerCase().trim() === name.toLowerCase().trim()
+    );
+
+    if (duplicateName) {
+      return res.status(409).json({
+        error: `A folder named "${name}" already exists in this location. Please choose a different name.`
+      });
     }
 
     // Check for duplicate caseId if being updated (excluding current folder)
@@ -120,8 +155,8 @@ router.put('/folders/:id', requireAuth, async (req, res) => {
       // Filter out the current folder being updated
       const duplicateFolders = existingFolders.filter(f => f.id !== req.params.id);
       if (duplicateFolders.length > 0) {
-        return res.status(409).json({ 
-          error: `A folder already exists for this case. Each case can only have one folder. Please use the existing folder.` 
+        return res.status(409).json({
+          error: `A folder already exists for this case. Each case can only have one folder. Please use the existing folder.`
         });
       }
     }
@@ -157,7 +192,8 @@ router.delete('/folders/:id', requireAuth, async (req, res) => {
     }
 
     const folder = await getDocumentById(COLLECTIONS.FOLDERS, folderId);
-    if (!folder || folder.ownerId !== ownerId) {
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (!folder || String(folder.ownerId) !== String(ownerId)) {
       return res.status(404).json({ error: 'Folder not found or access denied' });
     }
 
@@ -242,7 +278,7 @@ router.get('/files', requireAuth, async (req, res) => {
   }
 });
 
-// View a specific document
+// View a specific document (proxy to serve inline for browser viewing)
 router.get('/files/:id/view', requireAuth, async (req, res) => {
   try {
     const ownerId = req.user.userId;
@@ -253,27 +289,98 @@ router.get('/files/:id/view', requireAuth, async (req, res) => {
 
     const doc = await getDocumentById(COLLECTIONS.DOCUMENTS, req.params.id);
 
-    if (!doc || doc.ownerId !== ownerId) {
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (!doc || String(doc.ownerId) !== String(ownerId)) {
       return res.status(404).json({ error: 'Document not found or access denied' });
     }
 
-    // Return document metadata with URL for viewing
-    // The frontend can use this URL to display the document
-    const response = {
-      id: doc.id,
-      name: doc.name,
-      mimetype: doc.mimetype,
-      size: doc.size,
-      url: doc.url,
-      resourceType: doc.resourceType,
-      createdAt: doc.createdAt?.toDate ? doc.createdAt.toDate().toISOString() : doc.createdAt
-    };
+    console.log(`👁️  View requested: ${doc.name}`);
 
-    console.log(`📄 Document view requested: ${doc.name} (${doc.mimetype})`);
+    // Fetch from Cloudinary and serve with inline disposition
+    if (doc.url && (doc.url.startsWith('http://') || doc.url.startsWith('https://'))) {
+      try {
+        const response = await fetch(doc.url);
 
-    res.json(response);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch file from storage: ${response.statusText}`);
+        }
+
+        // Set headers for inline viewing (open in browser, not download)
+        res.setHeader('Content-Type', doc.mimetype || 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${doc.name}"`);
+        if (doc.size) {
+          res.setHeader('Content-Length', doc.size);
+        }
+
+        // Pipe the file data to response
+        const buffer = await response.arrayBuffer();
+        res.send(Buffer.from(buffer));
+
+        console.log(`✅ View served: ${doc.name}`);
+      } catch (fetchError) {
+        console.error('Error fetching file from storage:', fetchError);
+        return res.status(500).json({ error: 'Failed to fetch file from storage' });
+      }
+    } else {
+      return res.status(400).json({ error: 'File URL not found or invalid' });
+    }
   } catch (error) {
     console.error('View document error:', error);
+    res.status(500).json({ error: 'Failed to retrieve document' });
+  }
+});
+
+// Download a specific document (proxy to handle CORS and filename issues)
+router.get('/files/:id/download', requireAuth, async (req, res) => {
+  try {
+    const ownerId = req.user.userId;
+
+    if (!ownerId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const doc = await getDocumentById(COLLECTIONS.DOCUMENTS, req.params.id);
+
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (!doc || String(doc.ownerId) !== String(ownerId)) {
+      return res.status(404).json({ error: 'Document not found or access denied' });
+    }
+
+    console.log(`📥 Download requested: ${doc.name}`);
+
+    // If the URL is a Cloudinary URL, fetch it and pipe it to the response
+    if (doc.url && (doc.url.startsWith('http://') || doc.url.startsWith('https://'))) {
+      try {
+        // Fetch the file from Cloudinary
+        const response = await fetch(doc.url);
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch file from storage: ${response.statusText}`);
+        }
+
+        // Sanitize filename to avoid header injection
+        const sanitizedName = doc.name.replace(/[^\x20-\x7E]/g, '').trim() || 'document';
+
+        // Set proper headers for download with original filename
+        res.setHeader('Content-Type', doc.mimetype || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${sanitizedName}"`);
+        res.setHeader('Content-Length', doc.size);
+
+        // Pipe the file data to response
+        const buffer = await response.arrayBuffer();
+        res.send(Buffer.from(buffer));
+
+        console.log(`✅ Download completed: ${sanitizedName}`);
+      } catch (fetchError) {
+        console.error('Error fetching file from storage:', fetchError);
+        return res.status(500).json({ error: 'Failed to fetch file from storage' });
+      }
+    } else {
+      // For local files (if any), return error as we only support cloud storage
+      return res.status(400).json({ error: 'File URL not found or invalid' });
+    }
+  } catch (error) {
+    console.error('Download document error:', error);
     res.status(500).json({ error: 'Failed to retrieve document' });
   }
 });
@@ -310,7 +417,8 @@ router.post('/upload', requireAuth, upload.array('files'), async (req, res) => {
     if (folderId) {
       try {
         const folder = await getDocumentById(COLLECTIONS.FOLDERS, folderId);
-        if (!folder || folder.ownerId !== ownerId) {
+        // Compare as strings to handle ObjectId vs string inconsistencies
+        if (!folder || String(folder.ownerId) !== String(ownerId)) {
           console.error(`❌ Folder not found or access denied: ${folderId}`);
           return res.status(404).json({ error: 'Folder not found or access denied' });
         }
@@ -333,12 +441,24 @@ router.post('/upload', requireAuth, upload.array('files'), async (req, res) => {
         const cloudinaryFolder = `lawyer-zen/user-${ownerId}${folderId ? `/folder-${folderId}` : ''}`;
         console.log(`☁️  Cloudinary folder: ${cloudinaryFolder}`);
 
+        // Determine resource type based on mimetype
+        // PDFs and other documents should be 'raw', images/videos use 'auto'
+        const isDocument = file.mimetype === 'application/pdf' ||
+          file.mimetype.startsWith('application/') ||
+          file.mimetype === 'text/plain' ||
+          file.mimetype.includes('document') ||
+          file.mimetype.includes('spreadsheet');
+
+        const resourceType = isDocument ? 'raw' : 'auto';
+        console.log(`📄 File type: ${file.mimetype}, Resource type: ${resourceType}`);
+
         const uploadResult = await uploadToCloudinary(
           file.buffer,
           file.originalname,
           cloudinaryFolder,
           {
             public_id: undefined, // Let Cloudinary generate unique ID
+            resource_type: resourceType, // Use correct resource type for documents
           }
         );
 
@@ -348,7 +468,7 @@ router.post('/upload', requireAuth, upload.array('files'), async (req, res) => {
           resource_type: uploadResult.resource_type
         });
 
-        // Create document record in Firestore
+        // Create document record in MongoDB
         const docData = {
           name: file.originalname,
           mimetype: file.mimetype,
@@ -361,7 +481,7 @@ router.post('/upload', requireAuth, upload.array('files'), async (req, res) => {
           tags: [],
         };
 
-        console.log(`💾 Saving to Firestore:`, docData);
+        console.log(`💾 Saving to MongoDB:`, docData);
         const doc = await createDocument(COLLECTIONS.DOCUMENTS, docData);
 
         console.log(`✅ File saved successfully:`, doc.id);
@@ -463,7 +583,8 @@ router.put('/files/:id', requireAuth, async (req, res) => {
     }
 
     const existing = await getDocumentById(COLLECTIONS.DOCUMENTS, req.params.id);
-    if (!existing || existing.ownerId !== ownerId) {
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (!existing || String(existing.ownerId) !== String(ownerId)) {
       return res.status(404).json({ error: 'File not found or access denied' });
     }
 
@@ -497,7 +618,8 @@ router.delete('/files/:id', requireAuth, async (req, res) => {
     }
 
     const doc = await getDocumentById(COLLECTIONS.DOCUMENTS, req.params.id);
-    if (!doc || doc.ownerId !== ownerId) {
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (!doc || String(doc.ownerId) !== String(ownerId)) {
       return res.status(404).json({ error: 'File not found or access denied' });
     }
 

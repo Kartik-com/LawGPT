@@ -98,6 +98,8 @@ export async function uploadToCloudinary(fileBuffer, fileName, folder = 'lawyer-
 
     const uploadOptions = {
       folder: folder,
+      type: 'upload', // Public delivery type - allows files to be accessed without authentication
+      access_mode: 'public', // Explicitly set to public access
       resource_type: 'auto', // Automatically detect image, video, raw, etc.
       use_filename: true,
       unique_filename: true,
@@ -113,13 +115,13 @@ export async function uploadToCloudinary(fileBuffer, fileName, folder = 'lawyer-
           console.error('❌ Cloudinary upload error:', error);
           // Provide more helpful error messages
           if (error.message?.includes('Invalid API Key') || error.http_code === 401) {
-            const errorMsg = error.message?.includes('Invalid cloud_name') 
+            const errorMsg = error.message?.includes('Invalid cloud_name')
               ? `Invalid Cloudinary Cloud Name: "${process.env.CLOUDINARY_CLOUD_NAME}". ` +
-                `Please get your correct cloud name from: https://cloudinary.com/console ` +
-                `and update CLOUDINARY_CLOUD_NAME in your .env file.`
+              `Please get your correct cloud name from: https://cloudinary.com/console ` +
+              `and update CLOUDINARY_CLOUD_NAME in your .env file.`
               : `Invalid Cloudinary credentials. Please verify all three values in your .env file: ` +
-                `CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET. ` +
-                `Get them from: https://cloudinary.com/console`;
+              `CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET. ` +
+              `Get them from: https://cloudinary.com/console`;
             reject(new Error(errorMsg));
           } else if (error.message?.includes('Invalid signature')) {
             reject(new Error('Invalid Cloudinary API Secret. Please check your CLOUDINARY_API_SECRET in .env file.'));
@@ -147,7 +149,7 @@ export async function uploadToCloudinary(fileBuffer, fileName, folder = 'lawyer-
     const readableStream = new Readable();
     readableStream.push(fileBuffer);
     readableStream.push(null);
-    
+
     readableStream.pipe(stream);
   });
 }
@@ -163,6 +165,8 @@ export async function uploadFileToCloudinary(filePath, folder = 'lawyer-zen', op
   try {
     const uploadOptions = {
       folder: folder,
+      type: 'upload', // Public delivery type - allows files to be accessed without authentication
+      access_mode: 'public', // Explicitly set to public access
       resource_type: 'auto',
       use_filename: true,
       unique_filename: true,

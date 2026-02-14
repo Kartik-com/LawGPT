@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth-jwt.js';
 import { logActivity } from '../middleware/activityLogger.js';
 import {
   createDocument,
@@ -7,8 +7,9 @@ import {
   updateDocument,
   deleteDocument,
   queryDocuments,
+  MODELS,
   COLLECTIONS
-} from '../services/firestore.js';
+} from '../services/mongodb.js';
 import {
   checkHearingConflicts,
   computeHearingTimes,
@@ -179,8 +180,12 @@ router.post('/', async (req, res) => {
     if (!normalizedHearingDate) {
       return res.status(400).json({ error: 'Valid hearing date is required' });
     }
-    if (isBeforeToday(normalizedHearingDate)) {
-      return res.status(400).json({ error: 'Hearing date cannot be in the past' });
+
+    // Only block past dates for scheduled hearings (upcoming hearings)
+    // Allow past dates for completed, adjourned, or cancelled hearings (historical data)
+    const status = req.body.status || 'scheduled';
+    if (status === 'scheduled' && isBeforeToday(normalizedHearingDate)) {
+      return res.status(400).json({ error: 'Hearing date cannot be in the past for scheduled hearings' });
     }
 
     let normalizedNextHearingDate = null;
@@ -352,6 +357,8 @@ router.post('/', async (req, res) => {
     res.status(201).json(hearing);
   } catch (error) {
     console.error('Create hearing error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Request body:', req.body);
     res.status(500).json({ error: 'Failed to create hearing', details: error.message });
   }
 });
@@ -361,7 +368,21 @@ router.put('/:id', async (req, res) => {
   try {
     const original = await getDocumentById(COLLECTIONS.HEARINGS, req.params.id);
     if (!original) return res.status(404).json({ error: 'Hearing not found' });
-    if (original.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+
+    // Debug ownership check
+    console.log('[Hearing Update] Ownership check:', {
+      hearingId: req.params.id,
+      hearingOwner: original.owner,
+      hearingOwnerType: typeof original.owner,
+      currentUser: req.user.userId,
+      currentUserType: typeof req.user.userId,
+      match: String(original.owner) === String(req.user.userId)
+    });
+
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (String(original.owner) !== String(req.user.userId)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
 
     const updates = { ...req.body };
     const resultingStatus = updates.status || original.status;
@@ -570,7 +591,8 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Hearing not found' });
     }
 
-    if (hearing.owner !== req.user.userId) {
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (String(hearing.owner) !== String(req.user.userId)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 

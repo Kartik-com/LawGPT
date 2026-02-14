@@ -5,7 +5,7 @@
  * Checks for overlapping hearings based on configurable resource scopes.
  */
 
-import { queryDocuments, getDocumentById, COLLECTIONS } from '../services/firestore.js';
+import { queryDocuments, getDocumentById, MODELS, COLLECTIONS } from '../services/mongodb.js';
 
 /**
  * Get active conflict scopes from environment configuration
@@ -133,7 +133,7 @@ export async function checkHearingConflicts(userId, startAt, endAt, resourceScop
             }
         }
 
-        // Convert Firestore Timestamps to Date objects
+        // Convert MongoDB/Mongoose Timestamps to Date objects
         const hearingStart = hearing.startAt?.toDate ? hearing.startAt.toDate() : new Date(hearing.startAt);
         const hearingEnd = hearing.endAt?.toDate ? hearing.endAt.toDate() : new Date(hearing.endAt);
 

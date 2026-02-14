@@ -7,13 +7,11 @@ const clientSchema = new mongoose.Schema({
   address: { type: String },
   panNumber: { type: String },
   aadharNumber: { type: String },
-  cases: [{ type: String }],
-  documents: [{ type: String }],
   notes: { type: String },
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
 }, { timestamps: true });
 
+// Indexes for efficient queries
+clientSchema.index({ owner: 1, email: 1 });
+
 export default mongoose.model('Client', clientSchema);
-
-
-

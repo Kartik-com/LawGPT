@@ -3,20 +3,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Plus, 
-  IndianRupee, 
-  Clock, 
-  FileText, 
-  User, 
+import {
+  Plus,
+  IndianRupee,
+  Clock,
+  FileText,
+  User,
   Calendar,
   Download,
   Send,
   Filter,
-  Search
+  Search,
+  Check
 } from 'lucide-react';
 import { useLegalData, TimeEntry, Invoice } from '@/contexts/LegalDataContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,13 +33,14 @@ const Billing = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState<Invoice | null>(null);
+  const [showMarkPaidConfirm, setShowMarkPaidConfirm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const { toast } = useToast();
 
   // New invoice form state
   const [invoiceForm, setInvoiceForm] = useState<{ clientId: string; caseId?: string; issueDate: string; dueDate: string; taxRate: string; discountAmount: string; items: { description: string; quantity: string; unitPrice: string; }[]; notes: string; terms: string; }>(
-    { clientId: '', caseId: '', issueDate: new Date().toISOString().split('T')[0], dueDate: new Date(Date.now()+14*24*60*60*1000).toISOString().split('T')[0], taxRate: '0', discountAmount: '0', items: [{ description: '', quantity: '1', unitPrice: '0' }], notes: '', terms: '' }
+    { clientId: '', caseId: '', issueDate: new Date().toISOString().split('T')[0], dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], taxRate: '0', discountAmount: '0', items: [{ description: '', quantity: '1', unitPrice: '0' }], notes: '', terms: '' }
   );
 
   // Form state for time entry
@@ -63,7 +66,7 @@ const Billing = () => {
 
   const handleTimeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     addTimeEntry({
       caseId: timeFormData.caseId,
       description: timeFormData.description,
@@ -84,7 +87,7 @@ const Billing = () => {
 
   // Helpers
   const computeTotals = (items: { description: string; quantity: string; unitPrice: string; }[], taxRate: number, discountAmount: number) => {
-    const mapped = items.map(i => ({ description: i.description, quantity: Number(i.quantity||0), unitPrice: Number(i.unitPrice||0), amount: Number(i.quantity||0) * Number(i.unitPrice||0) }));
+    const mapped = items.map(i => ({ description: i.description, quantity: Number(i.quantity || 0), unitPrice: Number(i.unitPrice || 0), amount: Number(i.quantity || 0) * Number(i.unitPrice || 0) }));
     const subtotal = mapped.reduce((s, i) => s + i.amount, 0);
     const taxAmount = Math.round((subtotal * taxRate) / 100);
     const total = Math.max(0, subtotal + taxAmount - discountAmount);
@@ -113,7 +116,7 @@ const Billing = () => {
   const filteredInvoices = invoices.filter(inv => {
     const clientName = clients.find(c => c.id === inv.clientId)?.name || '';
     const matchesSearch = clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || inv.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -126,7 +129,7 @@ const Billing = () => {
           <h1 className="text-3xl font-bold">Billing & Time Tracking</h1>
           <p className="text-muted-foreground">Manage invoices and track billable hours</p>
         </div>
-        
+
         <div className="flex gap-2">
           <Dialog open={showTimeDialog} onOpenChange={setShowTimeDialog}>
             <DialogTrigger asChild>
@@ -140,7 +143,7 @@ const Billing = () => {
                 <DialogTitle>Log Billable Time</DialogTitle>
                 <DialogDescription>Record time spent on case work</DialogDescription>
               </DialogHeader>
-              
+
               <form onSubmit={handleTimeSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="caseId">Case*</Label>
@@ -325,13 +328,17 @@ const Billing = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-lg">₹{(invoice.total||0).toLocaleString('en-IN')}</div>
+                    <div className="font-bold text-lg">₹{(invoice.total || 0).toLocaleString('en-IN')}</div>
                     <div className="flex gap-1">
                       <Button size="sm" variant="outline" onClick={() => setShowSendDialog(invoice)}>
                         <Send className="mr-1 h-3 w-3" />
                         Send
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setSelectedInvoice(invoice)}>
+                      <Button size="sm" variant="outline" onClick={() => {
+                        // Get fresh invoice data from invoices array
+                        const freshInvoice = invoices.find(inv => inv.id === invoice.id);
+                        setSelectedInvoice(freshInvoice || invoice);
+                      }}>
                         View
                       </Button>
                     </div>
@@ -363,7 +370,7 @@ const Billing = () => {
               {timeEntries.slice(0, 5).map((entry) => {
                 const case_ = cases.find(c => c.id === entry.caseId);
                 const amount = (entry.duration / 60) * entry.hourlyRate;
-                
+
                 return (
                   <div key={entry.id} className="p-3 border rounded-lg space-y-2">
                     <div className="flex items-center justify-between">
@@ -394,9 +401,9 @@ const Billing = () => {
                 <div className="text-center py-8 text-muted-foreground">
                   <Clock className="h-12 w-12 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No time entries yet</p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="mt-2"
                     onClick={() => setShowTimeDialog(true)}
                   >
@@ -508,36 +515,36 @@ const Billing = () => {
                 <div className="col-span-1 text-right">Action</div>
               </div>
               <div className="space-y-2 mt-2">
-              {invoiceForm.items.map((it, idx) => (
-                <div className="grid grid-cols-12 gap-2 items-center" key={idx}>
-                  <div className="col-span-6">
-                    <Input placeholder="Description" value={it.description} onChange={(e) => setInvoiceForm(p => { const items = [...p.items]; items[idx] = { ...items[idx], description: e.target.value }; return { ...p, items }; })} />
+                {invoiceForm.items.map((it, idx) => (
+                  <div className="grid grid-cols-12 gap-2 items-center" key={idx}>
+                    <div className="col-span-6">
+                      <Input placeholder="Description" value={it.description} onChange={(e) => setInvoiceForm(p => { const items = [...p.items]; items[idx] = { ...items[idx], description: e.target.value }; return { ...p, items }; })} />
+                    </div>
+                    <div className="col-span-2">
+                      <Input className="text-right" min="0" step="1" type="number" placeholder="Qty" value={it.quantity} onChange={(e) => setInvoiceForm(p => { const items = [...p.items]; items[idx] = { ...items[idx], quantity: e.target.value }; return { ...p, items }; })} />
+                    </div>
+                    <div className="col-span-2">
+                      <Input className="text-right" min="0" step="0.01" type="number" placeholder="Unit Price" value={it.unitPrice} onChange={(e) => setInvoiceForm(p => { const items = [...p.items]; items[idx] = { ...items[idx], unitPrice: e.target.value }; return { ...p, items }; })} />
+                    </div>
+                    <div className="col-span-1 text-right font-medium">
+                      ₹{(Number(it.quantity || 0) * Number(it.unitPrice || 0)).toLocaleString('en-IN')}
+                    </div>
+                    <div className="col-span-1 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setInvoiceForm(p => {
+                          const items = [...p.items];
+                          items.splice(idx, 1);
+                          return { ...p, items: items.length ? items : [{ description: '', quantity: '1', unitPrice: '0' }] };
+                        })}
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   </div>
-                  <div className="col-span-2">
-                    <Input className="text-right" min="0" step="1" type="number" placeholder="Qty" value={it.quantity} onChange={(e) => setInvoiceForm(p => { const items = [...p.items]; items[idx] = { ...items[idx], quantity: e.target.value }; return { ...p, items }; })} />
-                  </div>
-                  <div className="col-span-2">
-                    <Input className="text-right" min="0" step="0.01" type="number" placeholder="Unit Price" value={it.unitPrice} onChange={(e) => setInvoiceForm(p => { const items = [...p.items]; items[idx] = { ...items[idx], unitPrice: e.target.value }; return { ...p, items }; })} />
-                  </div>
-                  <div className="col-span-1 text-right font-medium">
-                    ₹{(Number(it.quantity||0)*Number(it.unitPrice||0)).toLocaleString('en-IN')}
-                  </div>
-                  <div className="col-span-1 flex justify-end">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setInvoiceForm(p => {
-                        const items = [...p.items];
-                        items.splice(idx, 1);
-                        return { ...p, items: items.length ? items : [{ description: '', quantity: '1', unitPrice: '0' }] };
-                      })}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                ))}
               </div>
               <div className="mt-3">
                 <Button variant="outline" onClick={() => setInvoiceForm(p => ({ ...p, items: [...p.items, { description: '', quantity: '1', unitPrice: '0' }] }))}>Add Item</Button>
@@ -553,20 +560,20 @@ const Billing = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowInvoiceDialog(false)}>Cancel</Button>
             <Button onClick={async () => {
-              const { items, subtotal, taxAmount, total } = computeTotals(invoiceForm.items, Number(invoiceForm.taxRate||0), Number(invoiceForm.discountAmount||0));
+              const { items, subtotal, taxAmount, total } = computeTotals(invoiceForm.items, Number(invoiceForm.taxRate || 0), Number(invoiceForm.discountAmount || 0));
               const payload: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'> = {
                 clientId: invoiceForm.clientId,
                 caseId: invoiceForm.caseId || undefined,
-                invoiceNumber: `INV-${new Date().getFullYear()}-${Math.floor(Math.random()*9000+1000)}`,
+                invoiceNumber: `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000 + 1000)}`,
                 issueDate: new Date(invoiceForm.issueDate),
                 dueDate: new Date(invoiceForm.dueDate),
                 status: 'draft',
                 currency: 'INR',
                 items,
                 subtotal,
-                taxRate: Number(invoiceForm.taxRate||0),
+                taxRate: Number(invoiceForm.taxRate || 0),
                 taxAmount,
-                discountAmount: Number(invoiceForm.discountAmount||0),
+                discountAmount: Number(invoiceForm.discountAmount || 0),
                 total,
                 notes: invoiceForm.notes,
                 terms: invoiceForm.terms,
@@ -575,7 +582,7 @@ const Billing = () => {
               } as any;
               await createInvoice(payload);
               setShowInvoiceDialog(false);
-              setInvoiceForm({ clientId: '', caseId: '', issueDate: new Date().toISOString().split('T')[0], dueDate: new Date(Date.now()+14*24*60*60*1000).toISOString().split('T')[0], taxRate: '0', discountAmount: '0', items: [{ description: '', quantity: '1', unitPrice: '0' }], notes: '', terms: '' });
+              setInvoiceForm({ clientId: '', caseId: '', issueDate: new Date().toISOString().split('T')[0], dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], taxRate: '0', discountAmount: '0', items: [{ description: '', quantity: '1', unitPrice: '0' }], notes: '', terms: '' });
               toast({ title: 'Invoice Created', description: 'Invoice has been created successfully.' });
             }}>Save Invoice</Button>
           </DialogFooter>
@@ -636,10 +643,26 @@ const Billing = () => {
               </div>}
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setSelectedInvoice(null)}>Close</Button>
-                <Button variant="outline" onClick={async () => { await updateInvoice(selectedInvoice.id, { status: 'paid' }); toast({ title: 'Marked Paid' }); }}>
-                  Mark Paid
-                </Button>
-                <Button variant="outline" onClick={async () => { await deleteInvoice(selectedInvoice.id); setSelectedInvoice(null); toast({ title: 'Invoice Deleted' }); }}>
+
+                {/* Only show Mark as Paid button if invoice is not already paid */}
+                {selectedInvoice.status !== 'paid' && (
+                  <Button
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => setShowMarkPaidConfirm(true)}
+                  >
+                    <Check className="mr-2 h-4 w-4" />
+                    Mark as Paid
+                  </Button>
+                )}
+
+                <Button variant="outline" onClick={async () => {
+                  const confirmed = window.confirm(`Delete Invoice ${selectedInvoice.invoiceNumber}?\n\nThis action cannot be undone.`);
+                  if (confirmed) {
+                    await deleteInvoice(selectedInvoice.id);
+                    setSelectedInvoice(null);
+                    toast({ title: 'Invoice Deleted', description: 'Invoice has been deleted successfully.' });
+                  }
+                }}>
                   Delete
                 </Button>
               </div>
@@ -647,6 +670,51 @@ const Billing = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Mark as Paid Confirmation Dialog */}
+      <AlertDialog open={showMarkPaidConfirm} onOpenChange={setShowMarkPaidConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark Invoice as Paid?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              {selectedInvoice && (
+                <div className="space-y-2 mt-2">
+                  <div>Are you sure you want to mark this invoice as <span className="font-semibold text-green-600">PAID</span>?</div>
+                  <div className="bg-muted p-3 rounded-md text-sm space-y-1">
+                    <div><span className="font-medium">Invoice:</span> {selectedInvoice.invoiceNumber}</div>
+                    <div><span className="font-medium">Client:</span> {clients.find(c => c.id === selectedInvoice.clientId)?.name}</div>
+                    <div><span className="font-medium">Amount:</span> <span className="text-lg font-bold">₹{selectedInvoice.total.toLocaleString('en-IN')}</span></div>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">This action cannot be undone.</div>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-green-600 hover:bg-green-700"
+              onClick={async () => {
+                if (selectedInvoice) {
+                  console.log('🔍 Before update - Invoice ID:', selectedInvoice.id, 'Status:', selectedInvoice.status);
+                  await updateInvoice(selectedInvoice.id, { status: 'paid' });
+                  console.log('✅ Update call completed');
+
+                  toast({
+                    title: '✓ Invoice Marked as Paid',
+                    description: `Invoice ${selectedInvoice.invoiceNumber} (₹${selectedInvoice.total.toLocaleString('en-IN')}) has been marked as paid.`,
+                  });
+                  setShowMarkPaidConfirm(false);
+                  setSelectedInvoice(null);
+                }
+              }}
+            >
+              <Check className="mr-2 h-4 w-4" />
+              Confirm Payment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Send Invoice Dialog */}
       <Dialog open={!!showSendDialog} onOpenChange={(open) => { if (!open) setShowSendDialog(null); }}>
@@ -678,13 +746,13 @@ interface SendFormProps {
 const SendForm: React.FC<SendFormProps> = ({ invoice, onCancel, onSent }) => {
   const { clients } = useLegalData();
   const client = clients.find(c => c.id === invoice.clientId);
-  
+
   // Generate auto-generated content
   const generateAutoContent = () => {
-    const daysUntilDue = Math.ceil((new Date(invoice.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+    const daysUntilDue = Math.ceil((new Date(invoice.dueDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
     const isOverdue = daysUntilDue < 0;
     const isDueSoon = daysUntilDue <= 7 && daysUntilDue >= 0;
-    
+
     let urgencyText = '';
     if (isOverdue) {
       urgencyText = `This invoice is overdue by ${Math.abs(daysUntilDue)} day${Math.abs(daysUntilDue) !== 1 ? 's' : ''}. `;
@@ -694,7 +762,7 @@ const SendForm: React.FC<SendFormProps> = ({ invoice, onCancel, onSent }) => {
 
     const totalAmount = `₹${invoice.total.toLocaleString('en-IN')}`;
     const dueDate = new Date(invoice.dueDate).toLocaleDateString('en-IN');
-    
+
     return {
       subject: `Invoice ${invoice.invoiceNumber} - Legal Services - Due ${dueDate}`,
       message: `Dear ${client?.name || 'Valued Client'},
@@ -743,10 +811,10 @@ Legal Services Team`
   const handleSendEmail = () => {
     // Create mailto URL with pre-filled content
     const mailtoUrl = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-    
+
     // Open default email client
     window.open(mailtoUrl, '_self');
-    
+
     // Call onSent callback to close dialog
     onSent();
   };
@@ -782,17 +850,17 @@ Legal Services Team`
         <Label>To*</Label>
         <Input value={to} type="email" onChange={(e) => setTo(e.target.value)} required />
       </div>
-      
+
       <div>
         <Label>Subject*</Label>
         <Input value={subject} onChange={(e) => setSubject(e.target.value)} required />
       </div>
-      
+
       <div>
         <Label>Message</Label>
-        <Textarea 
-          value={message} 
-          onChange={(e) => setMessage(e.target.value)} 
+        <Textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
           rows={12}
           className="font-mono text-sm"
         />
@@ -800,7 +868,7 @@ Legal Services Team`
           Clicking "Send Email" will open your default email client (Outlook, Gmail, etc.) with this content pre-filled.
         </p>
       </div>
-      
+
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

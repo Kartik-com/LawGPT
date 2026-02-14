@@ -1,13 +1,14 @@
 import express from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth-jwt.js';
 import { logActivity } from '../middleware/activityLogger.js';
-import { 
-  createDocument, 
-  getDocumentById, 
+import {
+  createDocument,
+  getDocumentById,
   deleteDocument,
   queryDocuments,
-  COLLECTIONS 
-} from '../services/firestore.js';
+  MODELS,
+  COLLECTIONS
+} from '../services/mongodb.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -15,7 +16,7 @@ router.use(requireAuth);
 router.get('/', async (req, res) => {
   try {
     const items = await queryDocuments(
-      COLLECTIONS.TIME_ENTRIES,
+      MODELS.TIME_ENTRIES,
       [{ field: 'owner', operator: '==', value: req.user.userId }],
       { field: 'createdAt', direction: 'desc' }
     );
@@ -26,7 +27,7 @@ router.get('/', async (req, res) => {
       code: error.code,
       message: error.message
     });
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch time entries',
       ...(process.env.NODE_ENV === 'development' && {
         details: error.message,
@@ -40,16 +41,16 @@ router.post('/', async (req, res) => {
   try {
     const data = { ...req.body, owner: req.user.userId };
     const item = await createDocument(COLLECTIONS.TIME_ENTRIES, data);
-    
+
     // Get case info for activity log
     const case_ = item.caseId ? await getDocumentById(COLLECTIONS.CASES, item.caseId) : null;
-    
+
     // Log activity - assuming duration is in minutes
     const durationInMinutes = item.duration;
-    const durationText = durationInMinutes >= 60 
-      ? `${Math.floor(durationInMinutes / 60)}h ${durationInMinutes % 60}m` 
+    const durationText = durationInMinutes >= 60
+      ? `${Math.floor(durationInMinutes / 60)}h ${durationInMinutes % 60}m`
       : `${durationInMinutes}m`;
-    
+
     await logActivity(
       req.user.userId,
       'time_logged',
@@ -65,7 +66,7 @@ router.post('/', async (req, res) => {
         hourlyRate: item.hourlyRate
       }
     );
-    
+
     res.status(201).json(item);
   } catch (error) {
     console.error('Create time entry error:', error);
@@ -78,7 +79,7 @@ router.delete('/:id', async (req, res) => {
     const item = await getDocumentById(COLLECTIONS.TIME_ENTRIES, req.params.id);
     if (!item) return res.status(404).json({ error: 'Not found' });
     if (item.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
-    
+
     await deleteDocument(COLLECTIONS.TIME_ENTRIES, req.params.id);
     res.json({ ok: true });
   } catch (error) {

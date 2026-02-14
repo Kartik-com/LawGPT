@@ -2,12 +2,13 @@ import express from 'express';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth-jwt.js';
 import {
     getDocumentById,
     updateDocument,
+    MODELS,
     COLLECTIONS
-} from '../services/firestore.js';
+} from '../services/mongodb.js';
 
 const router = express.Router();
 

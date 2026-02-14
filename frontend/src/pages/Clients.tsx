@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useFormAutoSave } from '@/hooks/useFormAutoSave';
 
 const Clients = () => {
   const { clients, cases, addClient, updateClient, deleteClient } = useLegalData();
@@ -40,6 +41,11 @@ const Clients = () => {
     notes: ''
   });
 
+  // Auto-save form data (only when adding new client, not editing)
+  const { clearSavedData, getSavedData } = useFormAutoSave('client-form', formData, {
+    enabled: !selectedClient // Only auto-save for new clients, not edits
+  });
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -50,6 +56,22 @@ const Clients = () => {
       aadharNumber: '',
       notes: ''
     });
+  };
+
+  // Restore saved data when opening dialog for new client
+  const handleOpenDialog = () => {
+    setSelectedClient(null);
+    const savedData = getSavedData();
+    if (savedData) {
+      setFormData(savedData);
+      toast({
+        title: 'Draft Restored',
+        description: 'Your previously entered client data has been restored.',
+        duration: 3000
+      });
+    } else {
+      resetForm();
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,6 +115,10 @@ const Clients = () => {
         });
         toast({ title: 'Client added successfully' });
       }
+
+      // Clear saved draft data after successful submission
+      clearSavedData();
+
       setShowAddDialog(false);
       setSelectedClient(null);
       resetForm();
@@ -128,7 +154,7 @@ const Clients = () => {
 
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
-            <Button onClick={() => { setSelectedClient(null); resetForm(); }}>
+            <Button onClick={handleOpenDialog}>
               <Plus className="mr-2 h-4 w-4" />
               Add New Client
             </Button>

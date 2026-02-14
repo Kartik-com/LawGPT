@@ -360,18 +360,18 @@ export const CaseDetailsPopup: React.FC<CaseDetailsPopupProps> = ({ case_, isOpe
                 <CardContent>
                   <div className="flex items-center justify-between">
                     {/* Pipeline Steps */}
-                    <div className="flex items-center space-x-4 flex-1">
+                    <div className="flex items-center space-x-2 flex-1 overflow-x-auto">
                       {/* Case Filed */}
-                      <div className="flex flex-col items-center space-y-2">
+                      <div className="flex flex-col items-center space-y-2 min-w-[70px]">
                         <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
                           <CheckCircle className="h-4 w-4 text-white" />
                         </div>
                         <span className="text-xs text-center">Case Filed</span>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
 
                       {/* First Hearing */}
-                      <div className="flex flex-col items-center space-y-2">
+                      <div className="flex flex-col items-center space-y-2 min-w-[70px]">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${sortedHearings.some(h => h.hearingType === 'first_hearing')
                           ? 'bg-green-500'
                           : 'bg-gray-300'
@@ -384,10 +384,26 @@ export const CaseDetailsPopup: React.FC<CaseDetailsPopupProps> = ({ case_, isOpe
                         </div>
                         <span className="text-xs text-center">First Hearing</span>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+
+                      {/* Interim Hearing */}
+                      <div className="flex flex-col items-center space-y-2 min-w-[70px]">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${sortedHearings.some(h => h.hearingType === 'interim_hearing')
+                          ? 'bg-green-500'
+                          : 'bg-gray-300'
+                          }`}>
+                          {sortedHearings.some(h => h.hearingType === 'interim_hearing') ? (
+                            <CheckCircle className="h-4 w-4 text-white" />
+                          ) : (
+                            <Clock className="h-4 w-4 text-gray-600" />
+                          )}
+                        </div>
+                        <span className="text-xs text-center">Interim</span>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
 
                       {/* Evidence */}
-                      <div className="flex flex-col items-center space-y-2">
+                      <div className="flex flex-col items-center space-y-2 min-w-[70px]">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${sortedHearings.some(h => h.hearingType === 'evidence_hearing')
                           ? 'bg-green-500'
                           : 'bg-gray-300'
@@ -400,10 +416,10 @@ export const CaseDetailsPopup: React.FC<CaseDetailsPopupProps> = ({ case_, isOpe
                         </div>
                         <span className="text-xs text-center">Evidence</span>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
 
                       {/* Arguments */}
-                      <div className="flex flex-col items-center space-y-2">
+                      <div className="flex flex-col items-center space-y-2 min-w-[70px]">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${sortedHearings.some(h => h.hearingType === 'argument_hearing')
                           ? 'bg-green-500'
                           : 'bg-gray-300'
@@ -416,10 +432,26 @@ export const CaseDetailsPopup: React.FC<CaseDetailsPopupProps> = ({ case_, isOpe
                         </div>
                         <span className="text-xs text-center">Arguments</span>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+
+                      {/* Final Hearing */}
+                      <div className="flex flex-col items-center space-y-2 min-w-[70px]">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${sortedHearings.some(h => h.hearingType === 'final_hearing')
+                          ? 'bg-green-500'
+                          : 'bg-gray-300'
+                          }`}>
+                          {sortedHearings.some(h => h.hearingType === 'final_hearing') ? (
+                            <CheckCircle className="h-4 w-4 text-white" />
+                          ) : (
+                            <Clock className="h-4 w-4 text-gray-600" />
+                          )}
+                        </div>
+                        <span className="text-xs text-center">Final</span>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
 
                       {/* Judgment */}
-                      <div className="flex flex-col items-center space-y-2">
+                      <div className="flex flex-col items-center space-y-2 min-w-[70px]">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${sortedHearings.some(h => h.hearingType === 'judgment_hearing')
                           ? 'bg-green-500'
                           : 'bg-gray-300'

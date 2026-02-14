@@ -1,8 +1,8 @@
-import { createDocument, COLLECTIONS } from '../services/firestore.js';
+import { createDocument, MODELS } from '../services/mongodb.js';
 
 export const logActivity = async (userId, type, message, entityType, entityId, metadata = {}) => {
   try {
-    await createDocument(COLLECTIONS.ACTIVITIES, {
+    await createDocument(MODELS.ACTIVITIES, {
       owner: userId,
       type,
       message,
@@ -39,8 +39,8 @@ export const createActivityLogger = (type, entityType) => {
 
 export const logActivityAfterResponse = async (req, res, next) => {
   const originalSend = res.send;
-  
-  res.send = function(data) {
+
+  res.send = function (data) {
     // Log activity after successful response
     if (req.activityData && req.user && res.statusCode >= 200 && res.statusCode < 300) {
       setImmediate(() => {
@@ -54,9 +54,9 @@ export const logActivityAfterResponse = async (req, res, next) => {
         );
       });
     }
-    
+
     originalSend.call(this, data);
   };
-  
+
   next();
 };

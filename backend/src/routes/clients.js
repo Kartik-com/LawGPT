@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth-jwt.js';
 import { logActivity } from '../middleware/activityLogger.js';
 import {
   createDocument,
@@ -7,8 +7,9 @@ import {
   updateDocument,
   deleteDocument,
   queryDocuments,
+  MODELS,
   COLLECTIONS
-} from '../services/firestore.js';
+} from '../services/mongodb.js';
 import { validateMobileNumber, validateEmail, validatePAN, validateAadhar, generateClientCode } from '../schemas/validation-schemas.js';
 
 const router = express.Router();
@@ -18,7 +19,7 @@ router.use(requireAuth);
 router.get('/', async (req, res) => {
   try {
     const clients = await queryDocuments(
-      COLLECTIONS.CLIENTS,
+      MODELS.CLIENTS,
       [{ field: 'owner', operator: '==', value: req.user.userId }],
       { field: 'createdAt', direction: 'desc' }
     );
@@ -214,9 +215,9 @@ router.put('/:id', async (req, res) => {
       ]);
 
       // Filter out the current client being updated
-      const duplicateName = existingByName.find(c => 
-        c.id !== req.params.id && 
-        c.name && 
+      const duplicateName = existingByName.find(c =>
+        c.id !== req.params.id &&
+        c.name &&
         c.name.trim().toLowerCase() === normalizedName.toLowerCase()
       );
 

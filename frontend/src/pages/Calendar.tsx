@@ -24,6 +24,7 @@ import { HearingTooltip } from '@/components/HearingTooltip';
 import { ConflictDialog } from '@/components/ConflictDialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api';
 
 const Calendar = () => {
   const { cases, clients, addCase, updateCase, deleteCase, addClient, hearings } = useLegalData();
@@ -174,11 +175,11 @@ const Calendar = () => {
 
   const getPriorityColor = (priority: Case['priority']) => {
     switch (priority) {
-      case 'urgent': return 'bg-destructive text-destructive-foreground';
-      case 'high': return 'bg-warning text-warning-foreground';
-      case 'medium': return 'bg-primary text-primary-foreground';
-      case 'low': return 'bg-muted text-muted-foreground';
-      default: return 'bg-secondary text-secondary-foreground';
+      case 'urgent': return 'bg-red-500 text-white';
+      case 'high': return 'bg-orange-500 text-white';
+      case 'medium': return 'bg-yellow-500 text-black';
+      case 'low': return 'bg-green-500 text-white';
+      default: return 'bg-gray-500 text-white';
     }
   };
 
@@ -272,7 +273,7 @@ const Calendar = () => {
       priority: formPriority,
       caseType: '',
       description: trimmedDescription,
-      nextHearing: undefined as unknown as Date,
+      nextHearing: selectedDate,
       documents: [] as string[],
       notes: '',
       alerts: [],
@@ -416,28 +417,33 @@ const Calendar = () => {
     await deleteCase(c.id);
   };
 
-  const handleViewCaseDetails = (hearing: any) => {
-    // Try multiple approaches to find the case
+  const handleViewCaseDetails = (event: any) => {
     let associatedCase = null;
 
-    // First, try using the populated case data if available
-    if (hearing.populatedCase && hearing.populatedCase._id) {
-      associatedCase = cases.find(c => c.id === hearing.populatedCase._id);
-    }
+    // If this is a regular case (not a hearing event), use it directly
+    if (!event.isHearing || event.eventType === 'case') {
+      associatedCase = event;
+    } else {
+      // This is a hearing event, find the associated case
+      // First, try using the populated case data if available
+      if (event.populatedCase && event.populatedCase._id) {
+        associatedCase = cases.find(c => c.id === event.populatedCase._id);
+      }
 
-    // If not found, try the regular caseId approach
-    if (!associatedCase) {
-      associatedCase = cases.find(c =>
-        c.id === hearing.caseId ||
-        c.id === hearing.caseId.toString() ||
-        hearing.caseId === c.id ||
-        hearing.caseId === c.id.toString()
-      );
-    }
+      // If not found, try the regular caseId approach
+      if (!associatedCase) {
+        associatedCase = cases.find(c =>
+          c.id === event.caseId ||
+          c.id === event.caseId?.toString() ||
+          event.caseId === c.id ||
+          event.caseId === c.id?.toString()
+        );
+      }
 
-    // If still not found, try finding by case number if we have it
-    if (!associatedCase && hearing.caseNumber && hearing.caseNumber !== `Case ${hearing.caseId}`) {
-      associatedCase = cases.find(c => c.caseNumber === hearing.caseNumber);
+      // If still not found, try finding by case number if we have it
+      if (!associatedCase && event.caseNumber && event.caseNumber !== `Case ${event.caseId}`) {
+        associatedCase = cases.find(c => c.caseNumber === event.caseNumber);
+      }
     }
 
     if (associatedCase) {
@@ -445,6 +451,8 @@ const Calendar = () => {
       setShowCaseDetails(true);
     }
   };
+
+
 
   return (
     <div className="space-y-6">
@@ -454,7 +462,7 @@ const Calendar = () => {
           <h1 className="text-3xl font-bold">Legal Calendar</h1>
           <p className="text-muted-foreground">Court hearings and important dates</p>
         </div>
-        <Button onClick={openCreateModal} >
+        <Button onClick={openCreateModal}>
           <Plus className="mr-2 h-4 w-4" />
           Schedule Hearing
         </Button>
@@ -524,9 +532,9 @@ const Calendar = () => {
                               className={cn(
                                 "w-2 h-2 rounded-full",
                                 event.isHearing ? 'bg-blue-500' :
-                                  (event as any).priority === 'urgent' ? 'bg-destructive' :
-                                    (event as any).priority === 'high' ? 'bg-warning' :
-                                      (event as any).priority === 'medium' ? 'bg-primary' : 'bg-muted-foreground'
+                                  (event as any).priority === 'urgent' ? 'bg-red-500' :
+                                    (event as any).priority === 'high' ? 'bg-orange-500' :
+                                      (event as any).priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
                               )}
                               title={event.isHearing ? 'Next Hearing' : `${(event as any).priority || 'medium'} priority case`}
                             />
@@ -626,6 +634,7 @@ const Calendar = () => {
 
                     {!event.isHearing && (
                       <div className="flex items-center gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={() => handleViewCaseDetails(event)}>View</Button>
                         <Button variant="outline" size="sm" onClick={() => openEditModal(event as Case)}>Edit</Button>
                         <Button variant="destructive" size="sm" onClick={() => handleDelete(event as Case)}>Delete</Button>
                       </div>
@@ -636,10 +645,9 @@ const Calendar = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="w-full"
                           onClick={() => handleViewCaseDetails(event)}
                         >
-                          View in Case Details
+                          View
                         </Button>
                       </div>
                     )}
@@ -849,6 +857,8 @@ const Calendar = () => {
           setCaseForDetails(null);
         }}
       />
+
+
 
       {/* Conflict Dialog */}
       <ConflictDialog

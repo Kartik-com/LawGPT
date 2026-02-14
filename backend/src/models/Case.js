@@ -13,13 +13,13 @@ const caseSchema = new mongoose.Schema({
   caseType: { type: String },
   description: { type: String },
   nextHearing: { type: Date },
-  documents: [{ type: String }],
   notes: { type: String },
   alerts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Alert' }],
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
 }, { timestamps: true });
 
+// Indexes for efficient queries
+caseSchema.index({ owner: 1, status: 1 });
+caseSchema.index({ owner: 1, nextHearing: 1 });
+
 export default mongoose.model('Case', caseSchema);
-
-
-

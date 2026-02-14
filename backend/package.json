@@ -4,12 +4,10 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "node --env-file=.env --watch index.js",
+    "dev": "node start-dev.js",
     "start": "node -r dotenv/config index.js",
-    "check:firebase": "node check-firebase-config.js",
-    "test:env": "node --test tests/env.test.js",
+    "kill-port": "node -e \"require('child_process').exec('FOR /F \\\"tokens=5\\\" %P IN (\\'netstat -ano ^| findstr :5000 ^| findstr LISTENING\\') DO taskkill /F /PID %P', (err) => { if (err) console.log('Port is free'); else console.log('Port 5000 freed'); })\"",
     "seed:legal": "node src/scripts/seedLegalSections.js",
-    "migrate-local-to-firestore": "node ./scripts/migrate-to-firebase.js",
     "upload-media-to-cloudinary": "node ./scripts/upload-media-to-cloudinary.js",
     "test:db": "node test-api.js"
   },
@@ -21,14 +19,15 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "firebase-admin": "^12.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.8.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.10",
     "qrcode": "^1.5.3",
     "speakeasy": "^2.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
   }
 }

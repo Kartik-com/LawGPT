@@ -1,13 +1,14 @@
 import express from 'express';
-import { requireAuth } from '../middleware/auth.js';
-import { 
-  createDocument, 
-  getDocumentById, 
-  updateDocument, 
+import { requireAuth } from '../middleware/auth-jwt.js';
+import {
+  createDocument,
+  getDocumentById,
+  updateDocument,
   deleteDocument,
   queryDocuments,
-  COLLECTIONS 
-} from '../services/firestore.js';
+  MODELS,
+  COLLECTIONS
+} from '../services/mongodb.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -15,7 +16,7 @@ router.use(requireAuth);
 router.get('/', async (req, res) => {
   try {
     const items = await queryDocuments(
-      COLLECTIONS.ALERTS,
+      MODELS.ALERTS,
       [{ field: 'owner', operator: '==', value: req.user.userId }],
       { field: 'createdAt', direction: 'desc' }
     );
@@ -26,7 +27,7 @@ router.get('/', async (req, res) => {
       code: error.code,
       message: error.message
     });
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch alerts',
       ...(process.env.NODE_ENV === 'development' && {
         details: error.message,
@@ -38,8 +39,8 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const data = { 
-      ...req.body, 
+    const data = {
+      ...req.body,
       owner: req.user.userId,
       isRead: false
     };
@@ -54,16 +55,16 @@ router.post('/', async (req, res) => {
 router.patch('/:id/read', async (req, res) => {
   try {
     const item = await getDocumentById(COLLECTIONS.ALERTS, req.params.id);
-    
+
     if (!item) {
       return res.status(404).json({ error: 'Alert not found' });
     }
-    
+
     // Check if user owns this alert
     if (item.owner !== req.user.userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    
+
     const updated = await updateDocument(COLLECTIONS.ALERTS, req.params.id, { isRead: true });
     res.json(updated);
   } catch (error) {
@@ -76,27 +77,27 @@ router.patch('/mark-all-read', async (req, res) => {
   try {
     // Get all unread alerts for the user
     const unreadAlerts = await queryDocuments(
-      COLLECTIONS.ALERTS,
+      MODELS.ALERTS,
       [
         { field: 'owner', operator: '==', value: req.user.userId },
         { field: 'isRead', operator: '==', value: false }
       ]
     );
-    
+
     // Update each alert
-    const updatePromises = unreadAlerts.map(alert => 
+    const updatePromises = unreadAlerts.map(alert =>
       updateDocument(COLLECTIONS.ALERTS, alert.id, { isRead: true })
     );
-    
+
     await Promise.all(updatePromises);
-    
+
     // Get all alerts after update
     const items = await queryDocuments(
-      COLLECTIONS.ALERTS,
+      MODELS.ALERTS,
       [{ field: 'owner', operator: '==', value: req.user.userId }],
       { field: 'createdAt', direction: 'desc' }
     );
-    
+
     res.json(items);
   } catch (error) {
     console.error('Mark all read error:', error);
@@ -107,16 +108,16 @@ router.patch('/mark-all-read', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const item = await getDocumentById(COLLECTIONS.ALERTS, req.params.id);
-    
+
     if (!item) {
       return res.status(404).json({ error: 'Alert not found' });
     }
-    
+
     // Check if user owns this alert
     if (item.owner !== req.user.userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    
+
     await deleteDocument(COLLECTIONS.ALERTS, req.params.id);
     res.json({ ok: true });
   } catch (error) {

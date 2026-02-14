@@ -8,13 +8,13 @@ const documentSchema = new mongoose.Schema({
   cloudinaryPublicId: { type: String }, // Cloudinary public ID for deletion
   resourceType: { type: String, enum: ['image', 'video', 'raw', 'auto'], default: 'auto' }, // Cloudinary resource type
   folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Folder' },
-  ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  tags: [{ type: String }],
+  caseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Case' }, // Optional case reference
+  ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
 }, { timestamps: true });
 
+// Indexes for efficient queries
+documentSchema.index({ ownerId: 1, folderId: 1 });
+documentSchema.index({ ownerId: 1, caseId: 1 });
+
 export default mongoose.model('Document', documentSchema);
-
-
-
-
 

@@ -25,6 +25,7 @@ import { CaseConflictChecker } from '@/components/CaseConflictChecker';
 import { CaseSummaryGenerator } from '@/components/CaseSummaryGenerator';
 import { CaseDetailsPopup } from '@/components/CaseDetailsPopup';
 import { useToast } from '@/hooks/use-toast';
+import { useFormAutoSave } from '@/hooks/useFormAutoSave';
 
 const COURT_OPTIONS = [
   'Supreme Court of India',
@@ -78,6 +79,11 @@ const Cases = () => {
     notes: ''
   });
 
+  // Auto-save form data (only when adding new case, not editing)
+  const { clearSavedData, getSavedData } = useFormAutoSave('case-form', formData, {
+    enabled: !selectedCase // Only auto-save for new cases, not edits
+  });
+
   const resetForm = () => {
     setFormData({
       caseNumber: '',
@@ -95,6 +101,22 @@ const Cases = () => {
     });
     setClientSelection({ mode: 'custom' });
     setCourtSelectValue('');
+  };
+
+  // Restore saved data when opening dialog for new case
+  const handleOpenDialog = () => {
+    setSelectedCase(null);
+    const savedData = getSavedData();
+    if (savedData) {
+      setFormData(savedData);
+      toast({
+        title: 'Draft Restored',
+        description: 'Your previously entered case data has been restored.',
+        duration: 3000
+      });
+    } else {
+      resetForm();
+    }
   };
 
   const handleClientSelect = (value: string) => {
@@ -197,6 +219,7 @@ const Cases = () => {
 
     if (selectedCase) {
       // Update existing case
+      const hearingDateObj = formData.hearingDate ? new Date(formData.hearingDate) : selectedCase.hearingDate;
       updateCase(selectedCase.id, {
         ...formData,
         caseNumber: trimmedCaseNumber,
@@ -204,7 +227,8 @@ const Cases = () => {
         courtName: trimmedCourtName,
         description: trimmedDescription,
         notes: trimmedNotes,
-        hearingDate: formData.hearingDate ? new Date(formData.hearingDate) : selectedCase.hearingDate,
+        hearingDate: hearingDateObj,
+        nextHearing: hearingDateObj, // Update nextHearing to match hearingDate
         documents: selectedCase.documents,
         alerts: selectedCase.alerts
       });
@@ -252,6 +276,7 @@ const Cases = () => {
 
       // Create case regardless of client creation status
       try {
+        const hearingDateObj = formData.hearingDate ? new Date(formData.hearingDate) : undefined as unknown as Date;
         await addCase({
           ...formData,
           caseNumber: trimmedCaseNumber,
@@ -259,7 +284,8 @@ const Cases = () => {
           courtName: trimmedCourtName,
           description: trimmedDescription,
           notes: trimmedNotes,
-          hearingDate: formData.hearingDate ? new Date(formData.hearingDate) : undefined as unknown as Date,
+          hearingDate: hearingDateObj,
+          nextHearing: hearingDateObj,
           documents: [],
           alerts: []
         });
@@ -308,6 +334,10 @@ const Cases = () => {
         description: 'Case details have been updated.'
       });
     }
+
+    // Clear saved draft data after successful submission
+    clearSavedData();
+
     setShowAddDialog(false);
     setSelectedCase(null);
     resetForm();
@@ -327,12 +357,12 @@ const Cases = () => {
 
   const getStatusIcon = (status: Case['status']) => {
     switch (status) {
-      case 'active': return <Clock className="h-4 w-4" />;
-      case 'pending': return <AlertTriangle className="h-4 w-4" />;
-      case 'won': return <CheckCircle className="h-4 w-4" />;
-      case 'closed': return <XCircle className="h-4 w-4" />;
-      case 'lost': return <XCircle className="h-4 w-4" />;
-      default: return <FileText className="h-4 w-4" />;
+      case 'active': return <Clock className="h-3.5 w-3.5" />;
+      case 'pending': return <AlertTriangle className="h-3.5 w-3.5" />;
+      case 'won': return <CheckCircle className="h-3.5 w-3.5" />;
+      case 'closed': return <XCircle className="h-3.5 w-3.5" />;
+      case 'lost': return <XCircle className="h-3.5 w-3.5" />;
+      default: return <FileText className="h-3.5 w-3.5" />;
     }
   };
 
@@ -358,18 +388,18 @@ const Cases = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Case Management</h1>
-          <p className="text-muted-foreground">Manage all your legal cases efficiently</p>
+          <h1 className="text-2xl font-bold mb-1">Case Management</h1>
+          <p className="text-xs text-muted-foreground">Manage all your legal cases efficiently</p>
         </div>
 
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
-            <Button onClick={() => { setSelectedCase(null); resetForm(); }}>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button onClick={handleOpenDialog} size="sm" className="h-8 text-xs">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
               Add New Case
             </Button>
           </DialogTrigger>
@@ -589,24 +619,24 @@ const Cases = () => {
 
       {/* Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Search & Filter Cases</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Search & Filter Cases</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-64">
+        <CardContent className="pt-2">
+          <div className="flex flex-wrap gap-2">
+            <div className="flex-1 min-w-48">
               <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="Search by case number, client name, or opposing party..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
+                  className="pl-8 h-8 text-xs"
                 />
               </div>
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-32 h-8 text-xs">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
@@ -619,7 +649,7 @@ const Cases = () => {
               </SelectContent>
             </Select>
             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-32 h-8 text-xs">
                 <SelectValue placeholder="All Priority" />
               </SelectTrigger>
               <SelectContent>
@@ -635,7 +665,7 @@ const Cases = () => {
       </Card>
 
       {/* Cases Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {filteredCases.map((case_) => (
           <Card
             key={case_.id}
@@ -645,44 +675,44 @@ const Cases = () => {
               setShowCaseDetails(true);
             }}
           >
-            <CardHeader>
+            <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
+                  <CardTitle className="text-sm flex items-center gap-1.5">
                     {getStatusIcon(case_.status)}
                     {case_.caseNumber}
                   </CardTitle>
-                  <CardDescription>{case_.caseType}</CardDescription>
+                  <CardDescription className="text-[10px]">{case_.caseType}</CardDescription>
                 </div>
-                <div className="flex gap-1">
-                  <Badge variant={getStatusColor(case_.status)}>
+                <div className="flex gap-0.5">
+                  <Badge variant={getStatusColor(case_.status)} className="text-[10px] h-4 px-1">
                     {case_.status}
                   </Badge>
-                  <Badge variant={getPriorityColor(case_.priority)}>
+                  <Badge variant={getPriorityColor(case_.priority)} className="text-[10px] h-4 px-1">
                     {case_.priority}
                   </Badge>
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <User className="h-4 w-4 text-muted-foreground" />
+            <CardContent className="pt-2">
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-xs">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="font-medium">{case_.clientName}</span>
                 </div>
                 {case_.opposingParty && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <span>vs</span>
                     <span>{case_.opposingParty}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-sm">
-                  <Building className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-1.5 text-xs">
+                  <Building className="h-3.5 w-3.5 text-muted-foreground" />
                   <span>{case_.courtName}</span>
                 </div>
                 {case_.nextHearing && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>
                       {new Date(case_.nextHearing).toLocaleDateString('en-IN')}
                       {case_.hearingTime && ` at ${case_.hearingTime}`}
@@ -690,16 +720,17 @@ const Cases = () => {
                   </div>
                 )}
                 {case_.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">
+                  <p className="text-xs text-muted-foreground line-clamp-2">
                     {case_.description}
                   </p>
                 )}
               </div>
 
-              <div className="flex gap-2 mt-4">
+              <div className="flex gap-1.5 mt-2">
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-6 text-[10px] px-2"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedCase(case_);
@@ -732,6 +763,7 @@ const Cases = () => {
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-6 text-[10px] px-2"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (confirm('Are you sure you want to delete this case?')) {
@@ -749,17 +781,17 @@ const Cases = () => {
 
       {filteredCases.length === 0 && (
         <Card>
-          <CardContent className="text-center py-12">
-            <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No cases found</h3>
-            <p className="text-muted-foreground mb-4">
+          <CardContent className="text-center py-8">
+            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+            <h3 className="text-sm font-semibold mb-1.5">No cases found</h3>
+            <p className="text-xs text-muted-foreground mb-2">
               {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all'
                 ? 'No cases match your search criteria.'
                 : 'Start by adding your first case.'
               }
             </p>
-            <Button onClick={() => setShowAddDialog(true)}>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button onClick={() => setShowAddDialog(true)} size="sm" className="h-7 text-xs">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
               Add First Case
             </Button>
           </CardContent>

@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth-jwt.js';
 import { logActivity } from '../middleware/activityLogger.js';
 import {
   createDocument,
@@ -7,8 +7,9 @@ import {
   updateDocument,
   deleteDocument,
   queryDocuments,
+  MODELS,
   COLLECTIONS
-} from '../services/firestore.js';
+} from '../services/mongodb.js';
 import { validateHearingType } from '../schemas/validation-schemas.js';
 
 
@@ -19,7 +20,7 @@ router.use(requireAuth);
 router.get('/', async (req, res) => {
   try {
     const cases = await queryDocuments(
-      COLLECTIONS.CASES,
+      MODELS.CASES,
       [{ field: 'owner', operator: '==', value: req.user.userId }],
       { field: 'createdAt', direction: 'desc' }
     );
@@ -121,7 +122,8 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const item = await getDocumentById(COLLECTIONS.CASES, req.params.id);
-    if (!item || item.owner !== req.user.userId) {
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (!item || String(item.owner) !== String(req.user.userId)) {
       return res.status(404).json({ error: 'Not found' });
     }
     res.json(item);
@@ -134,7 +136,8 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const existing = await getDocumentById(COLLECTIONS.CASES, req.params.id);
-    if (!existing || existing.owner !== req.user.userId) {
+    // Compare as strings to handle ObjectId vs string inconsistencies
+    if (!existing || String(existing.owner) !== String(req.user.userId)) {
       return res.status(404).json({ error: 'Not found' });
     }
 
@@ -208,7 +211,41 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Migration endpoint to populate nextHearing from hearingDate for existing cases
+router.post('/migrate-next-hearing', async (req, res) => {
+  try {
+    // Get all cases for the current user
+    const cases = await queryDocuments(
+      COLLECTIONS.CASES,
+      [{ field: 'owner', operator: '==', value: req.user.userId }]
+    );
+
+    let updated = 0;
+    let skipped = 0;
+
+    // Update cases that have hearingDate but no nextHearing
+    for (const caseItem of cases) {
+      if (caseItem.hearingDate && !caseItem.nextHearing) {
+        await updateDocument(COLLECTIONS.CASES, caseItem.id, {
+          nextHearing: caseItem.hearingDate
+        });
+        updated++;
+      } else {
+        skipped++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Migration complete: ${updated} cases updated, ${skipped} cases skipped`,
+      updated,
+      skipped,
+      total: cases.length
+    });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: 'Failed to migrate cases' });
+  }
+});
+
 export default router;
-
-
-

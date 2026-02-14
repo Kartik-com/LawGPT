@@ -1,10 +1,11 @@
 import express from 'express';
-import { requireAuth } from '../middleware/auth.js';
-import { 
+import { requireAuth } from '../middleware/auth-jwt.js';
+import {
   queryDocuments,
   getDocumentById,
-  COLLECTIONS 
-} from '../services/firestore.js';
+  MODELS,
+  COLLECTIONS
+} from '../services/mongodb.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -45,7 +46,7 @@ router.get('/stats', async (req, res) => {
       COLLECTIONS.INVOICES,
       [{ field: 'owner', operator: '==', value: userId }]
     );
-    
+
     const allInvoicesThisMonth = allInvoices.filter(inv => {
       if (!inv.createdAt) return false;
       const created = inv.createdAt.toDate ? inv.createdAt.toDate() : new Date(inv.createdAt);
@@ -66,7 +67,7 @@ router.get('/stats', async (req, res) => {
     // Calculate previous month for comparison
     const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-    
+
     const allInvoicesPrevMonth = allInvoices.filter(inv => {
       if (!inv.createdAt) return false;
       const created = inv.createdAt.toDate ? inv.createdAt.toDate() : new Date(inv.createdAt);
@@ -84,7 +85,7 @@ router.get('/stats', async (req, res) => {
         { field: 'billable', operator: '==', value: true }
       ]
     );
-    
+
     const billableTimeEntries = allTimeEntries.filter(entry => {
       if (!entry.date) return false;
       const entryDate = entry.date.toDate ? entry.date.toDate() : new Date(entry.date);
@@ -120,7 +121,7 @@ router.get('/stats', async (req, res) => {
 router.get('/activity', async (req, res) => {
   try {
     const userId = req.user.userId;
-    
+
     // Try to get activities from Activity collection first
     const allActivities = await queryDocuments(
       COLLECTIONS.ACTIVITIES,
@@ -136,7 +137,7 @@ router.get('/activity', async (req, res) => {
         timestamp: activity.createdAt?.toDate ? activity.createdAt.toDate() : new Date(activity.createdAt),
         metadata: activity.metadata
       }));
-      
+
       return res.json(activities);
     }
 
@@ -149,7 +150,7 @@ router.get('/activity', async (req, res) => {
       [{ field: 'owner', operator: '==', value: userId }],
       { field: 'createdAt', direction: 'desc' }
     );
-    
+
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const recentCases = allCases.filter(c => {
       if (!c.createdAt) return false;
@@ -178,7 +179,7 @@ router.get('/activity', async (req, res) => {
       [{ field: 'owner', operator: '==', value: userId }],
       { field: 'createdAt', direction: 'desc' }
     );
-    
+
     const recentClients = allClients.filter(c => {
       if (!c.createdAt) return false;
       const created = c.createdAt.toDate ? c.createdAt.toDate() : new Date(c.createdAt);
@@ -205,7 +206,7 @@ router.get('/activity', async (req, res) => {
       [{ field: 'owner', operator: '==', value: userId }],
       { field: 'createdAt', direction: 'desc' }
     );
-    
+
     const recentInvoices = allInvoices.filter(inv => {
       if (!inv.createdAt) return false;
       const created = inv.createdAt.toDate ? inv.createdAt.toDate() : new Date(inv.createdAt);
@@ -236,7 +237,7 @@ router.get('/activity', async (req, res) => {
       [{ field: 'owner', operator: '==', value: userId }],
       { field: 'createdAt', direction: 'desc' }
     );
-    
+
     const recentTimeEntries = allTimeEntries.filter(te => {
       if (!te.createdAt) return false;
       const created = te.createdAt.toDate ? te.createdAt.toDate() : new Date(te.createdAt);
@@ -245,11 +246,11 @@ router.get('/activity', async (req, res) => {
 
     for (const timeEntry of recentTimeEntries) {
       const case_ = timeEntry.caseId ? await getDocumentById(COLLECTIONS.CASES, timeEntry.caseId) : null;
-      const durationText = timeEntry.duration >= 60 
-        ? `${Math.floor(timeEntry.duration / 60)}h ${timeEntry.duration % 60}m` 
+      const durationText = timeEntry.duration >= 60
+        ? `${Math.floor(timeEntry.duration / 60)}h ${timeEntry.duration % 60}m`
         : `${timeEntry.duration}m`;
       const createdAt = timeEntry.createdAt?.toDate ? timeEntry.createdAt.toDate() : new Date(timeEntry.createdAt);
-      
+
       activities.push({
         id: `time-${timeEntry.id}`,
         type: 'time_logged',
@@ -267,7 +268,7 @@ router.get('/activity', async (req, res) => {
 
     // Sort all activities by timestamp
     activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
+
     res.json(activities.slice(0, 10));
   } catch (error) {
     console.error('Dashboard activity error:', error);
@@ -289,7 +290,7 @@ router.get('/notifications', async (req, res) => {
       COLLECTIONS.ALERTS,
       [{ field: 'owner', operator: '==', value: userId }]
     );
-    
+
     const upcomingAlerts = allAlerts.filter(alert => {
       if (!alert.alertTime) return false;
       const alertTime = alert.alertTime.toDate ? alert.alertTime.toDate() : new Date(alert.alertTime);
@@ -305,7 +306,7 @@ router.get('/notifications', async (req, res) => {
       COLLECTIONS.CASES,
       [{ field: 'owner', operator: '==', value: userId }]
     );
-    
+
     const todaysHearings = allCases.filter(c => {
       if (!c.hearingDate) return false;
       const hearingDate = c.hearingDate.toDate ? c.hearingDate.toDate() : new Date(c.hearingDate);
@@ -345,7 +346,7 @@ router.get('/notifications', async (req, res) => {
       COLLECTIONS.INVOICES,
       [{ field: 'owner', operator: '==', value: userId }]
     );
-    
+
     const overdueInvoices = allInvoices.filter(inv => {
       if (!['sent', 'overdue'].includes(inv.status)) return false;
       if (!inv.dueDate) return false;
