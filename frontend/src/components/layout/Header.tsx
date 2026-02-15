@@ -50,7 +50,7 @@ export const Header = () => {
           variant="ghost"
           size="sm"
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="h-7 w-7 p-0"
+          className="h-7 w-7 p-0 border border-transparent hover:border-accent hover:border-2 hover:bg-transparent hover:text-foreground transition-all"
         >
           {theme === 'dark' ? (
             <Sun className="h-3.5 w-3.5" />
@@ -65,7 +65,7 @@ export const Header = () => {
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-7 w-7 rounded-full">
+            <Button variant="ghost" className="relative h-7 w-7 rounded-full border border-transparent hover:border-accent hover:border-2 hover:bg-transparent hover:text-foreground transition-all">
               <Avatar className="h-7 w-7">
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                   {user?.name?.charAt(0) || 'U'}

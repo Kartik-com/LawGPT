@@ -669,7 +669,7 @@ const Cases = () => {
         {filteredCases.map((case_) => (
           <Card
             key={case_.id}
-            className="shadow-card-custom hover:shadow-elevated transition-shadow cursor-pointer"
+            className="shadow-card-custom border border-transparent hover:border-accent hover:border-2 hover:bg-transparent transition-all cursor-pointer"
             onClick={() => {
               setCaseForDetails(case_);
               setShowCaseDetails(true);

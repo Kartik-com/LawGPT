@@ -182,7 +182,7 @@ export const NotificationDropdown = ({ unreadCount }: NotificationDropdownProps)
             <Button
                 variant="ghost"
                 size="sm"
-                className="relative h-8 w-8 p-0"
+                className="relative h-8 w-8 p-0 border border-transparent hover:border-accent hover:border-2 hover:bg-transparent hover:text-foreground transition-all"
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <Bell className="h-4 w-4" />

@@ -30,7 +30,7 @@ const Calendar = () => {
   const { cases, clients, addCase, updateCase, deleteCase, addClient, hearings } = useLegalData();
   const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date()); // Auto-select today
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<Case | null>(null);
   const [showCaseDetails, setShowCaseDetails] = useState(false);
@@ -455,44 +455,44 @@ const Calendar = () => {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2 md:space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Legal Calendar</h1>
-          <p className="text-muted-foreground">Court hearings and important dates</p>
+          <h1 className="text-xl md:text-2xl font-bold">Legal Calendar</h1>
+          <p className="text-xs md:text-sm text-muted-foreground">Court hearings and important dates</p>
         </div>
-        <Button onClick={openCreateModal}>
-          <Plus className="mr-2 h-4 w-4" />
+        <Button onClick={openCreateModal} size="sm" className="h-8 text-xs">
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
           Schedule Hearing
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 md:gap-3">
         {/* Calendar */}
         <Card className="lg:col-span-2 shadow-elevated">
-          <CardHeader>
+          <CardHeader className="pb-1.5">
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5 text-primary" />
+              <CardTitle className="flex items-center gap-1.5 text-sm">
+                <CalendarIcon className="h-4 w-4 text-primary" />
                 {monthNames[currentMonth]} {currentYear}
               </CardTitle>
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" onClick={previousMonth}>
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-3.5 w-3.5" />
                 </Button>
                 <Button variant="outline" size="sm" onClick={nextMonth}>
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
-            <CardDescription>Click on a date to view scheduled hearings</CardDescription>
+            <CardDescription className="text-[10px]">Click on a date to view scheduled hearings</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-1.5">
             {/* Week headers */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-1 mb-1">
               {weekDays.map(day => (
-                <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
+                <div key={day} className="p-1 text-center text-[10px] font-medium text-muted-foreground">
                   {day}
                 </div>
               ))}
@@ -502,7 +502,7 @@ const Calendar = () => {
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, index) => {
                 if (day === null) {
-                  return <div key={index} className="p-2 h-16"></div>;
+                  return <div key={index} className="p-1.5 h-12"></div>;
                 }
 
                 const date = new Date(currentYear, currentMonth, day);
@@ -515,22 +515,23 @@ const Calendar = () => {
                     key={day}
                     onClick={() => setSelectedDate(date)}
                     className={cn(
-                      "p-2 h-16 border rounded-lg cursor-pointer transition-colors hover:bg-muted",
-                      isToday(day) && "bg-primary text-primary-foreground",
-                      isSelected && !isToday(day) && "bg-accent text-accent-foreground",
-                      casesForDay.length > 0 && "border-primary",
-                      conflictsForDay.length > 0 && "border-destructive bg-destructive/5"
+                      "p-1.5 h-12 border rounded-lg cursor-pointer transition-colors hover:bg-muted",
+                      isToday(day) && "border-orange-500 border-2",
+                      isSelected && !isToday(day) && "border-accent border-2",
+                      isSelected && isToday(day) && "border-orange-500 border-2",
+                      casesForDay.length > 0 && !isToday(day) && !isSelected && "border-primary",
+                      conflictsForDay.length > 0 && "bg-destructive/5"
                     )}
                   >
-                    <div className="text-sm font-medium">{day}</div>
+                    <div className="text-[11px] font-medium">{day}</div>
                     {casesForDay.length > 0 && (
-                      <div className="text-xs">
-                        <div className="flex flex-wrap gap-1 mt-1">
+                      <div className="text-[9px]">
+                        <div className="flex flex-wrap gap-0.5 mt-0.5">
                           {casesForDay.slice(0, 2).map((event, idx) => (
                             <div
                               key={idx}
                               className={cn(
-                                "w-2 h-2 rounded-full",
+                                "w-1.5 h-1.5 rounded-full",
                                 event.isHearing ? 'bg-blue-500' :
                                   (event as any).priority === 'urgent' ? 'bg-red-500' :
                                     (event as any).priority === 'high' ? 'bg-orange-500' :
@@ -540,11 +541,11 @@ const Calendar = () => {
                             />
                           ))}
                           {casesForDay.length > 2 && (
-                            <span className="text-xs">+{casesForDay.length - 2}</span>
+                            <span className="text-[9px]">+{casesForDay.length - 2}</span>
                           )}
                         </div>
                         {conflictsForDay.length > 0 && (
-                          <div className="text-xs text-destructive font-medium mt-1">
+                          <div className="text-[9px] text-destructive font-medium mt-0.5">
                             ⚠ Conflict
                           </div>
                         )}
@@ -559,9 +560,9 @@ const Calendar = () => {
 
         {/* Selected Date Details */}
         <Card className="shadow-elevated">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" />
+          <CardHeader className="pb-1.5">
+            <CardTitle className="flex items-center gap-1.5 text-sm">
+              <Clock className="h-4 w-4 text-primary" />
               {selectedDate ? selectedDate.toLocaleDateString('en-IN', {
                 weekday: 'long',
                 year: 'numeric',
@@ -569,7 +570,7 @@ const Calendar = () => {
                 day: 'numeric'
               }) : 'Select a Date'}
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-[10px]">
               {selectedDate ? (
                 selectedDateCases.length > 0 ?
                   `${selectedDateCases.length} hearing${selectedDateCases.length > 1 ? 's' : ''} scheduled` :
@@ -577,74 +578,75 @@ const Calendar = () => {
               ) : 'Click on a date to view hearings'}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-1.5">
             {selectedDateCases.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {selectedDateCases.map((event, index) => (
-                  <div key={event.id || index} className="p-3 border rounded-lg space-y-2">
+                  <div key={event.id || index} className="p-2 border rounded-lg space-y-1">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-sm">
+                      <h4 className="font-medium text-[11px]">
                         {event.isHearing ? `Next Hearing - ${event.caseNumber}` : event.caseNumber}
                       </h4>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         {event.isHearing ? (
-                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[9px] h-4 px-1">
                             Next Hearing
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className={getPriorityColor((event as any).priority || 'medium')}>
+                          <Badge variant="outline" className={`${getPriorityColor((event as any).priority || 'medium')} text-[9px] h-4 px-1`}>
                             {(event as any).priority || 'medium'}
                           </Badge>
                         )}
                       </div>
                     </div>
 
-                    <div className="space-y-1 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <User className="h-3 w-3" />
+                    <div className="space-y-0.5 text-[10px] text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <User className="h-2.5 w-2.5" />
                         <span>{event.isHearing ? event.clientName : event.clientName}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-3 w-3" />
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="h-2.5 w-2.5" />
                         <span>{event.courtName}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-3 w-3" />
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="h-2.5 w-2.5" />
                         <span>{event.hearingTime || 'Time not specified'}</span>
                       </div>
                       {event.judgeName && (
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-3 w-3" />
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="h-2.5 w-2.5" />
                           <span>{event.judgeName}</span>
                         </div>
                       )}
                       {event.isHearing && (
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <CalendarIcon className="h-3 w-3" />
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <CalendarIcon className="h-2.5 w-2.5" />
                           <span>Scheduled Next Hearing</span>
                         </div>
                       )}
                     </div>
 
                     {event.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2">
+                      <p className="text-[10px] text-muted-foreground line-clamp-2">
                         {event.description}
                       </p>
                     )}
 
                     {!event.isHearing && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button variant="outline" size="sm" onClick={() => handleViewCaseDetails(event)}>View</Button>
-                        <Button variant="outline" size="sm" onClick={() => openEditModal(event as Case)}>Edit</Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(event as Case)}>Delete</Button>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => handleViewCaseDetails(event)}>View</Button>
+                        <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => openEditModal(event as Case)}>Edit</Button>
+                        <Button variant="destructive" size="sm" className="h-6 text-[10px] px-2" onClick={() => handleDelete(event as Case)}>Delete</Button>
                       </div>
                     )}
 
                     {event.isHearing && (
-                      <div className="flex items-center gap-2 pt-1">
+                      <div className="flex items-center gap-1.5 pt-0.5">
                         <Button
                           variant="outline"
                           size="sm"
+                          className="h-6 text-[10px] px-2"
                           onClick={() => handleViewCaseDetails(event)}
                         >
                           View
@@ -655,18 +657,18 @@ const Calendar = () => {
                 ))}
               </div>
             ) : selectedDate ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <CalendarIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No hearings scheduled for this date</p>
-                <Button variant="outline" size="sm" className="mt-2" onClick={openCreateModal}>
-                  <Plus className="mr-2 h-3 w-3" />
+              <div className="text-center py-6 text-muted-foreground">
+                <CalendarIcon className="h-8 w-8 mx-auto mb-1.5 opacity-50" />
+                <p className="text-xs">No hearings scheduled for this date</p>
+                <Button variant="outline" size="sm" className="mt-1.5 h-6 text-[10px]" onClick={openCreateModal}>
+                  <Plus className="mr-1 h-2.5 w-2.5" />
                   Schedule Hearing
                 </Button>
               </div>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <CalendarIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Select a date to view hearings</p>
+              <div className="text-center py-6 text-muted-foreground">
+                <CalendarIcon className="h-8 w-8 mx-auto mb-1.5 opacity-50" />
+                <p className="text-xs">Select a date to view hearings</p>
               </div>
             )}
           </CardContent>
@@ -675,12 +677,12 @@ const Calendar = () => {
 
       {/* Upcoming Hearings */}
       <Card className="shadow-card-custom">
-        <CardHeader>
-          <CardTitle>Upcoming Hearings</CardTitle>
-          <CardDescription>Next 7 days</CardDescription>
+        <CardHeader className="pb-1.5">
+          <CardTitle className="text-sm">Upcoming Hearings</CardTitle>
+          <CardDescription className="text-[10px]">Next 7 days</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
+        <CardContent className="pt-1.5">
+          <div className="space-y-2">
             {cases
               .filter(case_ => {
                 if (!case_.nextHearing) return false;
@@ -692,26 +694,26 @@ const Calendar = () => {
               .sort((a, b) => new Date(a.nextHearing!).getTime() - new Date(b.nextHearing!).getTime())
               .slice(0, 5)
               .map((case_) => (
-                <div key={case_.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{case_.caseNumber}</span>
-                      <Badge variant="outline" className={getPriorityColor(case_.priority)}>
+                <div key={case_.id} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-xs">{case_.caseNumber}</span>
+                      <Badge variant="outline" className={`${getPriorityColor(case_.priority)} text-[9px] h-4 px-1`}>
                         {case_.priority}
                       </Badge>
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-[10px] text-muted-foreground">
                       {case_.clientName} • {case_.courtName}
                     </div>
                   </div>
-                  <div className="text-right text-sm">
+                  <div className="text-right text-xs">
                     <div className="font-medium">
                       {new Date(case_.nextHearing!).toLocaleDateString('en-IN', {
                         month: 'short',
                         day: 'numeric'
                       })}
                     </div>
-                    <div className="text-muted-foreground">
+                    <div className="text-[10px] text-muted-foreground">
                       {case_.hearingTime || 'Time TBD'}
                     </div>
                   </div>
@@ -726,8 +728,8 @@ const Calendar = () => {
               return caseDate >= today && caseDate <= sevenDaysFromNow;
             }).length === 0 && (
                 <div className="text-center py-4 text-muted-foreground">
-                  <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No upcoming hearings in the next 7 days</p>
+                  <CalendarIcon className="h-6 w-6 mx-auto mb-1.5 opacity-50" />
+                  <p className="text-xs">No upcoming hearings in the next 7 days</p>
                 </div>
               )}
           </div>

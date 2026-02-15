@@ -235,7 +235,7 @@ const Dashboard = () => {
         <div className="flex flex-wrap gap-1.5">
           <Button
             onClick={() => navigate('/dashboard/cases')}
-            className="flex-1 sm:flex-initial h-8 text-xs"
+            className="flex-1 sm:flex-initial h-8 text-xs border border-transparent hover:border-accent hover:border-2 hover:bg-transparent hover:text-foreground transition-all"
             size="sm"
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -244,7 +244,7 @@ const Dashboard = () => {
           <Button
             variant="outline"
             onClick={() => navigate('/dashboard/clients')}
-            className="flex-1 sm:flex-initial h-8 text-xs"
+            className="flex-1 sm:flex-initial h-8 text-xs border-transparent hover:border-accent hover:border-2 hover:bg-transparent hover:text-foreground transition-all"
             size="sm"
           >
             <Users className="mr-1.5 h-3.5 w-3.5" />
@@ -256,7 +256,7 @@ const Dashboard = () => {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
         {stats.map((stat, index) => (
-          <Card key={index} className="card-gradient shadow-elevated hover:shadow-professional transition-all duration-300">
+          <Card key={index} className="card-gradient shadow-elevated transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
               <CardTitle className="text-xs font-medium">{stat.title}</CardTitle>
               <stat.icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -316,14 +316,14 @@ const Dashboard = () => {
                           size="sm"
                           variant="outline"
                           onClick={() => navigate('/dashboard/cases')}
-                          className="h-7 text-[10px] px-2"
+                          className="h-7 text-[10px] px-2 border-transparent hover:border-accent hover:border-2 hover:bg-transparent hover:text-foreground transition-all"
                         >
                           View
                         </Button>
                         <Button
                           size="sm"
                           onClick={() => navigate('/dashboard/calendar')}
-                          className="h-7 text-[10px] px-2"
+                          className="h-7 text-[10px] px-2 border border-transparent hover:border-accent hover:border-2 hover:bg-transparent hover:text-foreground transition-all"
                         >
                           Details
                         </Button>
@@ -336,7 +336,7 @@ const Dashboard = () => {
                 <div className="mt-2 pt-2 border-t">
                   <Button
                     variant="outline"
-                    className="w-full h-7 text-xs"
+                    className="w-full h-7 text-xs border-transparent hover:border-accent hover:border-2 hover:bg-transparent hover:text-foreground transition-all"
                     size="sm"
                     onClick={() => navigate('/dashboard/calendar')}
                   >
@@ -365,15 +365,15 @@ const Dashboard = () => {
                   <Button
                     key={index}
                     variant="ghost"
-                    className="flex flex-col items-center justify-center gap-1 p-1.5 h-auto text-center hover:bg-accent/90 transition-colors group"
+                    className="flex flex-col items-center justify-center gap-1 p-1.5 h-auto text-center border border-transparent hover:border-accent hover:border-2 hover:bg-transparent hover:text-foreground transition-all group"
                     onClick={action.action}
                   >
                     <div className={`p-1 rounded-lg ${action.color} text-white`}>
                       <action.icon className="h-3 w-3" />
                     </div>
                     <div className="flex-1 min-w-0 w-full">
-                      <p className="font-medium text-[11px] truncate group-hover:text-black">{action.title}</p>
-                      <p className="text-[9px] text-muted-foreground group-hover:text-black truncate">{action.description}</p>
+                      <p className="font-medium text-[11px] truncate">{action.title}</p>
+                      <p className="text-[9px] text-muted-foreground truncate">{action.description}</p>
                     </div>
                   </Button>
                 ))}
