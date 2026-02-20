@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { getDocumentById, MODELS } from '../services/mongodb.js';
+import { isTokenBlacklisted } from '../services/tokenService.js';
 
 /**
  * JWT-based authentication middleware
@@ -37,6 +38,21 @@ export async function requireAuth(req, res, next) {
                     cookies: Object.keys(req.cookies || {}),
                     hasAuthHeader: !!req.headers.authorization
                 })
+            });
+        }
+
+        // Check if token is blacklisted in Redis
+        if (await isTokenBlacklisted(token)) {
+            console.error('Blacklisted token used:', token.substring(0, 20));
+            res.clearCookie('token', {
+                httpOnly: true,
+                sameSite: 'lax',
+                secure: process.env.NODE_ENV === 'production',
+                path: '/'
+            });
+            return res.status(401).json({
+                error: 'Token has been revoked',
+                errorCode: 'TOKEN_REVOKED'
             });
         }
 

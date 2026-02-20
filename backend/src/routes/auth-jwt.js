@@ -22,6 +22,7 @@ import {
   changePasswordSchema,
   reactivateSchema,
 } from '../schemas/authSchemas.js';
+import { blacklistToken, isTokenBlacklisted } from '../services/tokenService.js';
 
 const router = express.Router();
 
@@ -481,7 +482,20 @@ router.post('/login', validate({ body: loginSchema }), async (req, res) => {
  * POST /api/auth/logout
  * Logout user — clears both access + refresh token cookies
  */
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  const token = req.cookies?.token || (req.headers.authorization || '').replace('Bearer ', '');
+  const refreshToken = (req.cookies?.refreshToken);
+
+  // Blacklist tokens in Redis for immediate revocation across all instances
+  if (token) {
+    // Access tokens are 15m, so blacklist for 20m to be safe
+    await blacklistToken(token, 20 * 60);
+  }
+  if (refreshToken) {
+    // Refresh tokens are 7d, so blacklist for 7d
+    await blacklistToken(refreshToken, 7 * 24 * 60 * 60);
+  }
+
   const base = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -524,6 +538,13 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
 
+    // Check if refresh token is blacklisted (revoked)
+    if (await isTokenBlacklisted(refreshToken)) {
+      console.error('Revoked refresh token used');
+      res.clearCookie('refreshToken', { httpOnly: true, path: '/' });
+      return res.status(401).json({ error: 'Refresh token has been revoked' });
+    }
+
     if (decoded.type !== 'refresh') {
       return res.status(401).json({ error: 'Invalid token type' });
     }
@@ -538,6 +559,9 @@ router.post('/refresh', async (req, res) => {
     // Issue new access + refresh token pair (rotation)
     const newAccessToken = generateJWT(user._id.toString(), user.email, user.role);
     const newRefreshToken = generateRefreshToken(user._id.toString());
+
+    // Revoke the old refresh token (rotation policy)
+    await blacklistToken(refreshToken, 7 * 24 * 60 * 60);
 
     setAuthCookie(res, newAccessToken);
     setRefreshCookie(res, newRefreshToken);
