@@ -11,13 +11,31 @@ import {
   MODELS
 } from '../services/mongodb.js';
 import { requireAuth } from '../middleware/auth-jwt.js';
+import { setCsrfToken } from '../middleware/csrf.js';
 import { sendPasswordResetEmail } from '../utils/mailer.js';
+import { validate } from '../middleware/validate.js';
+import {
+  loginSchema,
+  registerSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  reactivateSchema,
+} from '../schemas/authSchemas.js';
 
 const router = express.Router();
 
+// ── CSRF Token Endpoint ────────────────────────────────────────────────────────
+// Sets csrf-token cookie (non-httpOnly) and returns token in body.
+// Called by the frontend useCSRF hook on first render.
+router.get('/csrf-token', setCsrfToken);
+
+
 // Helper constants
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = '7d'; // 7 days
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || (JWT_SECRET + '_refresh');
+const JWT_EXPIRES_IN = '15m'; // Short-lived access token
+const JWT_REFRESH_EXPIRES_IN = '7d'; // Long-lived refresh token
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 const ALLOWED_ROLES = ['lawyer', 'assistant'];
 
@@ -62,11 +80,18 @@ function generateJWT(userId, email, role) {
   if (!JWT_SECRET) {
     throw new Error('JWT_SECRET is not configured in environment variables');
   }
-
   return jwt.sign(
     { userId, email, role },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
+    { expiresIn: JWT_EXPIRES_IN } // 15 min access token
+  );
+}
+
+function generateRefreshToken(userId) {
+  return jwt.sign(
+    { userId, type: 'refresh' },
+    JWT_REFRESH_SECRET,
+    { expiresIn: JWT_REFRESH_EXPIRES_IN }
   );
 }
 
@@ -75,8 +100,18 @@ function setAuthCookie(res, token) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 15 * 60 * 1000, // 15 minutes
     path: '/'
+  });
+}
+
+function setRefreshCookie(res, refreshToken) {
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/' // Must be '/' so clearCookie('/', ...) reliably removes it on logout
   });
 }
 
@@ -121,7 +156,7 @@ function buildUserResponse(userId, profile) {
  * POST /api/auth/register
  * Register a new user
  */
-router.post('/register', async (req, res) => {
+router.post('/register', validate({ body: registerSchema }), async (req, res) => {
   try {
     const { email, password, name, barNumber, firm, role } = req.body;
 
@@ -166,7 +201,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Hash password
-    const passwordHash = User.schema.statics.hashPassword(password);
+    const passwordHash = await User.hashPassword(password);
 
     // Create user in MongoDB
     const userData = {
@@ -191,11 +226,13 @@ router.post('/register', async (req, res) => {
       console.log('✅ User registered successfully:', user.email);
     }
 
-    // Generate JWT
+    // Generate JWT + refresh token
     const token = generateJWT(user.id, user.email, user.role);
+    const refreshToken = generateRefreshToken(user.id);
 
-    // Set cookie
+    // Set cookies
     setAuthCookie(res, token);
+    setRefreshCookie(res, refreshToken);
 
     // Return user data
     res.status(201).json({
@@ -218,7 +255,7 @@ router.post('/register', async (req, res) => {
  * POST /api/auth/reactivate
  * Reactivate a previously deleted account (called after user confirms dialog)
  */
-router.post('/reactivate', async (req, res) => {
+router.post('/reactivate', validate({ body: reactivateSchema }), async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
@@ -238,7 +275,7 @@ router.post('/reactivate', async (req, res) => {
     }
 
     // Hash new password
-    const passwordHash = User.schema.statics.hashPassword(password);
+    const passwordHash = await User.hashPassword(password);
 
     // Reactivate the account with fresh data
     const reactivatedUser = await User.findByIdAndUpdate(
@@ -282,7 +319,7 @@ router.post('/reactivate', async (req, res) => {
  * POST /api/auth/login
  * Login user
  */
-router.post('/login', async (req, res) => {
+router.post('/login', validate({ body: loginSchema }), async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -410,8 +447,10 @@ router.post('/login', async (req, res) => {
     // Generate JWT
     const token = generateJWT(user.id, user.email, user.role);
 
-    // Set cookie
+    // Set access cookie + refresh cookie
+    const refreshToken = generateRefreshToken(user.id);
     setAuthCookie(res, token);
+    setRefreshCookie(res, refreshToken);
 
     if (process.env.NODE_ENV === 'development') {
       console.log('✅ Login successful for:', normalizedEmail);
@@ -440,16 +479,74 @@ router.post('/login', async (req, res) => {
 
 /**
  * POST /api/auth/logout
- * Logout user
+ * Logout user — clears both access + refresh token cookies
  */
 router.post('/logout', (req, res) => {
-  res.clearCookie('token', {
+  const base = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
+  };
+  // Clear access token (set at path '/')
+  res.clearCookie('token', { ...base, path: '/' });
+  // Clear refresh token — use same path it is set with ('/')
+  res.clearCookie('refreshToken', { ...base, path: '/' });
+  // Belt-and-suspenders: also clear legacy '/api' path in case old cookies exist
+  res.clearCookie('refreshToken', { ...base, path: '/api' });
+  res.clearCookie('refreshToken', { ...base, path: '/api/v1' });
+  // Clear CSRF token so a fresh one is issued on next login
+  res.clearCookie('csrf-token', {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
     path: '/'
   });
+
   res.json({ message: 'Logged out successfully' });
+});
+
+/**
+ * POST /api/auth/refresh
+ * Issue a new access token using the refresh token cookie
+ */
+router.post('/refresh', async (req, res) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'No refresh token provided' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    } catch (err) {
+      res.clearCookie('refreshToken', { httpOnly: true, path: '/' });
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({ error: 'Invalid token type' });
+    }
+
+    // Verify user still exists and is active
+    const user = await User.findById(decoded.userId).select('-passwordHash -resetPasswordToken -verificationToken');
+    if (!user || user.status === 'deleted' || user.deleted) {
+      res.clearCookie('refreshToken', { httpOnly: true, path: '/' });
+      return res.status(401).json({ error: 'User not found or account is inactive' });
+    }
+
+    // Issue new access + refresh token pair (rotation)
+    const newAccessToken = generateJWT(user._id.toString(), user.email, user.role);
+    const newRefreshToken = generateRefreshToken(user._id.toString());
+
+    setAuthCookie(res, newAccessToken);
+    setRefreshCookie(res, newRefreshToken);
+
+    res.json({ token: newAccessToken, message: 'Token refreshed' });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({ error: 'Failed to refresh token' });
+  }
 });
 
 /**
@@ -555,7 +652,7 @@ router.patch('/settings/preferences', requireAuth, async (req, res) => {
  * POST /api/auth/forgot-password
  * Request password reset
  */
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', validate({ body: forgotPasswordSchema }), async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -611,7 +708,7 @@ router.post('/forgot-password', async (req, res) => {
  * POST /api/auth/reset-password
  * Reset password with token
  */
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', validate({ body: resetPasswordSchema }), async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
@@ -639,7 +736,7 @@ router.post('/reset-password', async (req, res) => {
     }
 
     // Hash new password
-    const passwordHash = User.schema.statics.hashPassword(newPassword);
+    const passwordHash = await User.hashPassword(newPassword);
 
     // Update user password
     await updateDocument(MODELS.USERS, resetRequest.userId, { passwordHash });
@@ -763,7 +860,7 @@ router.patch('/settings/security', requireAuth, async (req, res) => {
  * POST /api/auth/change-password
  * Change password (requires authentication)
  */
-router.post('/change-password', requireAuth, async (req, res) => {
+router.post('/change-password', requireAuth, validate({ body: changePasswordSchema }), async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
@@ -791,7 +888,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
     }
 
     // Hash and update new password
-    const passwordHash = User.schema.statics.hashPassword(newPassword);
+    const passwordHash = await User.hashPassword(newPassword);
     await updateDocument(MODELS.USERS, req.user.userId, { passwordHash });
 
     res.json({ message: 'Password changed successfully' });

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, apiFetch } from '@/lib/api';
 import { Check, AlertCircle, Lock, Loader2, ChevronRight, ChevronLeft, LogOut } from 'lucide-react';
 
 interface FormData {
@@ -151,10 +151,9 @@ const OnboardingWizard = () => {
         setIsSubmitting(true);
 
         try {
-            const response = await fetch(getApiUrl('/api/auth/complete-onboarding'), {
+            const response = await apiFetch(getApiUrl('/api/v1/auth/complete-onboarding'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify(formData),
             });
 
@@ -281,7 +280,7 @@ const OnboardingWizard = () => {
                 </div>
             </CardHeader>
 
-            <CardContent className="space-y-6 max-h-[60vh] overflow-y-auto">
+            <CardContent className="space-y-6 max-h-[45vh] overflow-y-auto pr-1">
                 {/* Step 1: Identity Verification */}
                 {currentStep === 1 && (
                     <div className="space-y-5">

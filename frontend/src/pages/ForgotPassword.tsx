@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, apiFetch } from '@/lib/api';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -25,7 +25,7 @@ const ForgotPassword = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch(getApiUrl('/api/auth/forgot'), {
+      const res = await apiFetch(getApiUrl('/api/v1/auth/forgot'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -50,8 +50,8 @@ const ForgotPassword = () => {
       <Card className="w-full max-w-md shadow-professional">
         <CardHeader className="text-center">
           <div className="flex items-center justify-between mb-4">
-            <Link 
-              to="/login" 
+            <Link
+              to="/login"
               className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               <ArrowLeft className="h-4 w-4 mr-1" />

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, apiFetch } from '@/lib/api';
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -29,26 +29,26 @@ const ResetPassword = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate inputs
     if (!token.trim()) {
       toast({ title: 'Reset token is required', variant: 'destructive' });
       return;
     }
-    
+
     if (password.length < 6) {
       toast({ title: 'Password must be at least 6 characters long', variant: 'destructive' });
       return;
     }
-    
+
     if (password !== confirmPassword) {
       toast({ title: 'Passwords do not match', variant: 'destructive' });
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
-      const res = await fetch(getApiUrl('/api/auth/reset'), {
+      const res = await apiFetch(getApiUrl('/api/v1/auth/reset'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -73,8 +73,8 @@ const ResetPassword = () => {
       <Card className="w-full max-w-md shadow-professional">
         <CardHeader className="text-center">
           <div className="flex items-center justify-between mb-4">
-            <Link 
-              to="/login" 
+            <Link
+              to="/login"
               className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
@@ -88,24 +88,24 @@ const ResetPassword = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="token">Reset Token</Label>
-              <Input 
-                id="token" 
-                value={token} 
-                onChange={(e) => setToken(e.target.value)} 
+              <Input
+                id="token"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
                 placeholder="Enter your reset token"
-                required 
+                required
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">New Password</Label>
               <div className="relative">
-                <Input 
-                  id="password" 
+                <Input
+                  id="password"
                   type={showPassword ? "text" : "password"}
-                  value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter new password"
-                  required 
+                  required
                 />
                 <Button
                   type="button"
@@ -128,13 +128,13 @@ const ResetPassword = () => {
             <div className="space-y-2">
               <Label htmlFor="confirm">Confirm New Password</Label>
               <div className="relative">
-                <Input 
-                  id="confirm" 
+                <Input
+                  id="confirm"
                   type={showConfirmPassword ? "text" : "password"}
-                  value={confirmPassword} 
-                  onChange={(e) => setConfirmPassword(e.target.value)} 
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm new password"
-                  required 
+                  required
                 />
                 <Button
                   type="button"
@@ -155,7 +155,7 @@ const ResetPassword = () => {
               {isSubmitting ? 'Resetting…' : 'Reset Password'}
             </Button>
           </form>
-          
+
           <div className="mt-4 text-center text-sm">
             Remember your password? <Link to="/login" className="text-primary hover:underline font-medium">Sign in</Link>
           </div>

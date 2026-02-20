@@ -26,7 +26,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useLegalData } from '@/contexts/LegalDataContext';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, apiFetch } from '@/lib/api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -180,7 +180,7 @@ const Documents = () => {
 
       try {
         setIsLoading(true);
-        const res = await fetch(getApiUrl('/api/documents/upload'), {
+        const res = await apiFetch(getApiUrl('/api/documents/upload'), {
           method: 'POST',
           credentials: 'include',
           body: form
@@ -289,7 +289,7 @@ const Documents = () => {
 
     try {
       setIsLoading(true);
-      const res = await fetch(getApiUrl(`/api/documents/files/${doc._id}`), {
+      const res = await apiFetch(getApiUrl(`/api/documents/files/${doc._id}`), {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -331,7 +331,7 @@ const Documents = () => {
 
   const loadFolders = async () => {
     try {
-      const res = await fetch(getApiUrl('/api/documents/folders'), { credentials: 'include' });
+      const res = await apiFetch(getApiUrl('/api/documents/folders'), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const loadedFolders = data.folders || [];
@@ -351,7 +351,7 @@ const Documents = () => {
   const loadFiles = async () => {
     try {
       // Load ALL files for statistics (no folder filter at all)
-      const allFilesRes = await fetch(getApiUrl('/api/documents/files?all=true'), { credentials: 'include' });
+      const allFilesRes = await apiFetch(getApiUrl('/api/documents/files?all=true'), { credentials: 'include' });
       if (allFilesRes.ok) {
         const allFilesData = await allFilesRes.json();
         setAllFiles(allFilesData.files || []);
@@ -363,7 +363,7 @@ const Documents = () => {
 
       // Load files for current folder (or root if no folder selected)
       const q = currentFolderId ? `?folderId=${currentFolderId}` : '?folderId=null';
-      const res = await fetch(getApiUrl(`/api/documents/files${q}`), { credentials: 'include' });
+      const res = await apiFetch(getApiUrl(`/api/documents/files${q}`), { credentials: 'include' });
 
       if (res.ok) {
         const data = await res.json();
@@ -383,7 +383,7 @@ const Documents = () => {
   const createFoldersForExistingCases = async () => {
     try {
       // Get all existing folders
-      const foldersRes = await fetch(getApiUrl('/api/documents/folders'), { credentials: 'include' });
+      const foldersRes = await apiFetch(getApiUrl('/api/documents/folders'), { credentials: 'include' });
       if (!foldersRes.ok) return;
 
       const foldersData = await foldersRes.json();
@@ -398,7 +398,7 @@ const Documents = () => {
 
         if (!folderExists) {
           try {
-            const folderRes = await fetch(getApiUrl('/api/documents/folders'), {
+            const folderRes = await apiFetch(getApiUrl('/api/documents/folders'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
@@ -434,7 +434,7 @@ const Documents = () => {
     }
 
     try {
-      const res = await fetch(getApiUrl('/api/documents/folders'), {
+      const res = await apiFetch(getApiUrl('/api/documents/folders'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -478,7 +478,7 @@ const Documents = () => {
     setFolderToDelete(null);
 
     try {
-      const res = await fetch(getApiUrl(`/api/documents/folders/${folderId}`), {
+      const res = await apiFetch(getApiUrl(`/api/documents/folders/${folderId}`), {
         method: 'DELETE',
         credentials: 'include'
       });

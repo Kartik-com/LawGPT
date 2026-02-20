@@ -22,7 +22,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, apiFetch } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -174,10 +174,9 @@ const Settings = () => {
   const saveSettings = async (updates: Record<string, unknown>, successMessage: string, setLoading: (loading: boolean) => void) => {
     setLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/auth/me'), {
+      const res = await apiFetch(getApiUrl('/api/v1/auth/me'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(updates)
       });
 
@@ -313,10 +312,9 @@ const Settings = () => {
 
     setIsChangingPassword(true);
     try {
-      const res = await fetch(getApiUrl('/api/auth/change-password'), {
+      const res = await apiFetch(getApiUrl('/api/v1/auth/change-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           currentPassword: passwordData.currentPassword,
           newPassword: passwordData.newPassword
@@ -349,7 +347,7 @@ const Settings = () => {
   const handleExportData = async () => {
     setIsExporting(true);
     try {
-      const res = await fetch(getApiUrl('/api/auth/export-data'), {
+      const res = await apiFetch(getApiUrl('/api/v1/auth/export-data'), {
         method: 'GET',
         credentials: 'include'
       });
@@ -437,10 +435,9 @@ const Settings = () => {
 
     setIsDeletingAccount(true);
     try {
-      const res = await fetch(getApiUrl('/api/auth/delete-account'), {
+      const res = await apiFetch(getApiUrl('/api/v1/auth/delete-account'), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(deleteData)
       });
 

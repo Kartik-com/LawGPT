@@ -62,7 +62,7 @@ router.get('/:id', async (req, res) => {
   try {
     const item = await getDocumentById(COLLECTIONS.INVOICES, req.params.id);
     if (!item) return res.status(404).json({ error: 'Not found' });
-    if (item.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    if (item.owner?.toString() !== req.user.userId.toString()) return res.status(403).json({ error: 'Forbidden' });
     res.json(item);
   } catch (error) {
     console.error('Get invoice error:', error);
@@ -105,7 +105,7 @@ router.put('/:id', async (req, res) => {
   try {
     const original = await getDocumentById(COLLECTIONS.INVOICES, req.params.id);
     if (!original) return res.status(404).json({ error: 'Not found' });
-    if (original.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    if (original.owner?.toString() !== req.user.userId.toString()) return res.status(403).json({ error: 'Forbidden' });
 
     const updated = await updateDocument(COLLECTIONS.INVOICES, req.params.id, req.body);
 
@@ -155,7 +155,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const item = await getDocumentById(COLLECTIONS.INVOICES, req.params.id);
     if (!item) return res.status(404).json({ error: 'Not found' });
-    if (item.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    if (item.owner?.toString() !== req.user.userId.toString()) return res.status(403).json({ error: 'Forbidden' });
 
     await deleteDocument(COLLECTIONS.INVOICES, req.params.id);
     res.json({ ok: true });
@@ -170,12 +170,12 @@ router.post('/:id/send', async (req, res) => {
     const { to, subject, message } = req.body;
     const invoice = await getDocumentById(COLLECTIONS.INVOICES, req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Not found' });
-    if (invoice.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    if (invoice.owner?.toString() !== req.user.userId.toString()) return res.status(403).json({ error: 'Forbidden' });
 
     // Get client information for personalized email
     const client = invoice.clientId ? await getDocumentById(COLLECTIONS.CLIENTS, invoice.clientId) : null;
     if (!client) return res.status(400).json({ error: 'Client not found for invoice' });
-    if (client.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    if (client.owner?.toString() !== req.user.userId.toString()) return res.status(403).json({ error: 'Forbidden' });
 
     let recipient = to;
     if (!recipient) {

@@ -343,9 +343,18 @@ const Clients = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
+                      onClick={async () => {
                         if (confirm('Are you sure you want to delete this client?')) {
-                          deleteClient(client.id);
+                          try {
+                            await deleteClient(client.id);
+                            toast({ title: 'Client deleted successfully' });
+                          } catch (error) {
+                            toast({
+                              title: 'Delete failed',
+                              description: error instanceof Error ? error.message : 'Unable to delete client',
+                              variant: 'destructive'
+                            });
+                          }
                         }
                       }}
                       className="h-6 w-6 p-0 border border-transparent hover:border-accent hover:border-2 transition-all"

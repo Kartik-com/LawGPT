@@ -61,7 +61,7 @@ router.patch('/:id/read', async (req, res) => {
     }
 
     // Check if user owns this alert
-    if (item.owner !== req.user.userId) {
+    if (item.owner?.toString() !== req.user.userId.toString()) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -114,7 +114,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     // Check if user owns this alert
-    if (item.owner !== req.user.userId) {
+    if (item.owner?.toString() !== req.user.userId.toString()) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 

@@ -199,7 +199,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const existing = await getDocumentById(COLLECTIONS.CASES, req.params.id);
-    if (!existing || existing.owner !== req.user.userId) {
+    if (!existing || existing.owner?.toString() !== req.user.userId.toString()) {
       return res.status(404).json({ error: 'Not found' });
     }
 

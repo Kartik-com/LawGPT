@@ -1,0 +1,135 @@
+# apiVersion: apps/v1
+# deployment.yaml — LawGPT API Server
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lawgpt-api
+  namespace: lawgpt
+  labels:
+    app: lawgpt-api
+    version: "1.0.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: lawgpt-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Zero-downtime rolling updates
+  template:
+    metadata:
+      labels:
+        app: lawgpt-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/api/v1/metrics"
+        prometheus.io/port: "5000"
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: lawgpt-api
+          image: ghcr.io/your-org/lawgpt-api:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "5000"
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: lawgpt-secrets
+                  key: mongodb-uri
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: lawgpt-secrets
+                  key: redis-url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lawgpt-secrets
+                  key: jwt-secret
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lawgpt-secrets
+                  key: jwt-refresh-secret
+            - name: CORS_ORIGIN
+              valueFrom:
+                configMapKeyRef:
+                  name: lawgpt-config
+                  key: cors-origin
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 2
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lawgpt-workers
+  namespace: lawgpt
+  labels:
+    app: lawgpt-workers
+spec:
+  replicas: 1  # Workers are single-process — BullMQ handles job distribution
+  selector:
+    matchLabels:
+      app: lawgpt-workers
+  template:
+    metadata:
+      labels:
+        app: lawgpt-workers
+    spec:
+      containers:
+        - name: lawgpt-workers
+          image: ghcr.io/your-org/lawgpt-api:latest
+          command: ["node", "src/workers/index.js"]
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: lawgpt-secrets
+                  key: redis-url
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: lawgpt-secrets
+                  key: mongodb-uri
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

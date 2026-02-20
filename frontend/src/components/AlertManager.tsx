@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useFormatting } from '@/contexts/FormattingContext';
 
 interface DashboardNotifications {
   alerts: Alert[];
@@ -32,6 +33,7 @@ export const AlertManager = () => {
   const [notifications, setNotifications] = useState<DashboardNotifications | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { formatCurrency } = useFormatting();
 
   // Form state for creating alerts
   const [alertForm, setAlertForm] = useState({
@@ -158,93 +160,93 @@ export const AlertManager = () => {
           </CardTitle>
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             <Dialog open={showCreateAlert} onOpenChange={setShowCreateAlert}>
-            <DialogTrigger asChild>
+              <DialogTrigger asChild>
                 <Button size="sm" className="whitespace-nowrap">
-                <Plus className="mr-2 h-4 w-4" />
-                Create Alert
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Custom Alert</DialogTitle>
-                <DialogDescription>
-                  Set up a custom reminder for important case events
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="caseId">Case*</Label>
-                  <Select value={alertForm.caseId} onValueChange={(value) => 
-                    setAlertForm(prev => ({ ...prev, caseId: value }))
-                  }>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a case" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cases.map(case_ => (
-                        <SelectItem key={case_.id} value={case_.id}>
-                          {case_.caseNumber} - {case_.clientName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="type">Alert Type*</Label>
-                  <Select value={alertForm.type} onValueChange={(value) => 
-                    setAlertForm(prev => ({ ...prev, type: value as Alert['type'] }))
-                  }>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hearing">Hearing</SelectItem>
-                      <SelectItem value="deadline">Deadline</SelectItem>
-                      <SelectItem value="payment">Payment</SelectItem>
-                      <SelectItem value="document">Document</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="message">Alert Message*</Label>
-                  <Input
-                    id="message"
-                    value={alertForm.message}
-                    onChange={(e) => setAlertForm(prev => ({ ...prev, message: e.target.value }))}
-                    placeholder="Enter alert message..."
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="alertTime">Alert Date & Time*</Label>
-                  <Input
-                    id="alertTime"
-                    type="datetime-local"
-                    value={alertForm.alertTime}
-                    onChange={(e) => setAlertForm(prev => ({ ...prev, alertTime: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowCreateAlert(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleCreateAlert}>
+                  <Plus className="mr-2 h-4 w-4" />
                   Create Alert
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Custom Alert</DialogTitle>
+                  <DialogDescription>
+                    Set up a custom reminder for important case events
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="caseId">Case*</Label>
+                    <Select value={alertForm.caseId} onValueChange={(value) =>
+                      setAlertForm(prev => ({ ...prev, caseId: value }))
+                    }>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a case" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cases.map(case_ => (
+                          <SelectItem key={case_.id} value={case_.id}>
+                            {case_.caseNumber} - {case_.clientName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="type">Alert Type*</Label>
+                    <Select value={alertForm.type} onValueChange={(value) =>
+                      setAlertForm(prev => ({ ...prev, type: value as Alert['type'] }))
+                    }>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hearing">Hearing</SelectItem>
+                        <SelectItem value="deadline">Deadline</SelectItem>
+                        <SelectItem value="payment">Payment</SelectItem>
+                        <SelectItem value="document">Document</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="message">Alert Message*</Label>
+                    <Input
+                      id="message"
+                      value={alertForm.message}
+                      onChange={(e) => setAlertForm(prev => ({ ...prev, message: e.target.value }))}
+                      placeholder="Enter alert message..."
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="alertTime">Alert Date & Time*</Label>
+                    <Input
+                      id="alertTime"
+                      type="datetime-local"
+                      value={alertForm.alertTime}
+                      onChange={(e) => setAlertForm(prev => ({ ...prev, alertTime: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowCreateAlert(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCreateAlert}>
+                    Create Alert
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
-        </div>
-        
+
         <CardDescription>
-          {loading ? 'Loading notifications...' : 
-            notifications ? 
+          {loading ? 'Loading notifications...' :
+            notifications ?
               `${notifications.summary.todayHearings} today, ${notifications.summary.tomorrowHearings} tomorrow, ${notifications.summary.urgentCount} urgent` :
               'Manage notifications and reminders for your cases'
           }
@@ -354,7 +356,7 @@ export const AlertManager = () => {
                             Due: {formatDate(invoice.dueDate)}
                           </p>
                           <p className="text-xs font-medium text-destructive">
-                            ₹{invoice.total.toLocaleString('en-IN')}
+                            {formatCurrency(invoice.total)}
                           </p>
                         </div>
                         <Badge variant="destructive">Overdue</Badge>
@@ -374,13 +376,12 @@ export const AlertManager = () => {
                   {recentAlerts.slice(0, 3).map((alert) => {
                     const associatedCase = cases.find(c => c.id === alert.caseId);
                     const isUpcoming = new Date(alert.alertTime) > new Date();
-                    
+
                     return (
-                      <div 
-                        key={alert.id} 
-                        className={`p-3 rounded-lg border transition-colors overflow-hidden ${
-                          alert.isRead ? 'bg-muted/30' : 'bg-primary/5 border-primary/20'
-                        }`}
+                      <div
+                        key={alert.id}
+                        className={`p-3 rounded-lg border transition-colors overflow-hidden ${alert.isRead ? 'bg-muted/30' : 'bg-primary/5 border-primary/20'
+                          }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -395,7 +396,7 @@ export const AlertManager = () => {
                                   <Badge variant="destructive" className="text-xs">New</Badge>
                                 )}
                               </div>
-                              
+
                               <div className="text-xs text-muted-foreground space-y-1">
                                 <p>
                                   {isUpcoming ? 'Scheduled for: ' : 'Alert time: '}
@@ -407,7 +408,7 @@ export const AlertManager = () => {
                               </div>
                             </div>
                           </div>
-                          
+
                           <div className="flex gap-1">
                             {!alert.isRead && (
                               <Button
@@ -443,20 +444,20 @@ export const AlertManager = () => {
                 notifications.overdueInvoices.length === 0 &&
                 recentAlerts.length === 0
               )) && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Bell className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No urgent notifications</p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="mt-2"
-                    onClick={() => setShowCreateAlert(true)}
-                  >
-                    <Plus className="mr-2 h-3 w-3" />
-                    Create Alert
-                  </Button>
-                </div>
-              )}
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Bell className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No urgent notifications</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => setShowCreateAlert(true)}
+                    >
+                      <Plus className="mr-2 h-3 w-3" />
+                      Create Alert
+                    </Button>
+                  </div>
+                )}
             </>
           )}
         </div>

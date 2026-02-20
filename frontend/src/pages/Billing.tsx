@@ -30,7 +30,7 @@ import { useFormatting } from '@/contexts/FormattingContext';
 
 const Billing = () => {
   const { cases, clients, timeEntries, addTimeEntry, invoices, createInvoice, updateInvoice, deleteInvoice, sendInvoice } = useLegalData();
-  const { formatCurrency, formatDateShort } = useFormatting();
+  const { formatCurrency, formatDateShort, currencySymbol, currencyCode } = useFormatting();
   const [showTimeDialog, setShowTimeDialog] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
@@ -176,7 +176,7 @@ const Billing = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="hourlyRate">Hourly Rate (₹)*</Label>
+                    <Label htmlFor="hourlyRate">Hourly Rate ({currencySymbol})*</Label>
                     <Input
                       id="hourlyRate"
                       type="number"
@@ -388,7 +388,7 @@ const Billing = () => {
                     </p>
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="text-muted-foreground">
-                        {Math.round(entry.duration / 60 * 10) / 10}h @ ₹{entry.hourlyRate}/hr
+                        {Math.round(entry.duration / 60 * 10) / 10}h @ {currencySymbol}{entry.hourlyRate}/hr
                       </span>
                       <span className="font-medium">{formatCurrency(amount)}</span>
                     </div>
@@ -502,7 +502,7 @@ const Billing = () => {
               <Input type="number" value={invoiceForm.taxRate} onChange={(e) => setInvoiceForm(p => ({ ...p, taxRate: e.target.value }))} className="border-transparent hover:border-accent hover:border-2 transition-all" />
             </div>
             <div>
-              <Label>Discount (₹)</Label>
+              <Label>Discount ({currencySymbol})</Label>
               <Input type="number" value={invoiceForm.discountAmount} onChange={(e) => setInvoiceForm(p => ({ ...p, discountAmount: e.target.value }))} className="border-transparent hover:border-accent hover:border-2 transition-all" />
             </div>
           </div>
@@ -512,8 +512,8 @@ const Billing = () => {
               <div className="grid grid-cols-12 gap-3 px-3 py-3 rounded-md bg-muted text-xs font-medium">
                 <div className="col-span-6 text-left">Description</div>
                 <div className="col-span-2 text-center">Qty</div>
-                <div className="col-span-2 text-center">Unit Price (₹)</div>
-                <div className="col-span-1 text-center">Amount (₹)</div>
+                <div className="col-span-2 text-center">Unit Price ({currencySymbol})</div>
+                <div className="col-span-1 text-center">Amount ({currencySymbol})</div>
                 <div className="col-span-1 text-center">Action</div>
               </div>
               <div className="space-y-3 mt-3">
@@ -574,7 +574,7 @@ const Billing = () => {
                 issueDate: new Date(invoiceForm.issueDate),
                 dueDate: new Date(invoiceForm.dueDate),
                 status: 'draft',
-                currency: 'INR',
+                currency: currencyCode,
                 items,
                 subtotal,
                 taxRate: Number(invoiceForm.taxRate || 0),
@@ -767,7 +767,7 @@ const SendForm: React.FC<SendFormProps> = ({ invoice, onCancel, onSent }) => {
       urgencyText = `This invoice is due in ${daysUntilDue} day${daysUntilDue !== 1 ? 's' : ''}. `;
     }
 
-    const totalAmount = `₹${invoice.total.toLocaleString('en-IN')}`;
+    const totalAmount = `${currencySymbol}${invoice.total.toLocaleString(currencyCode === 'INR' ? 'en-IN' : 'en-US')}`;
     const dueDate = formatDateShort(invoice.dueDate);
 
     return {
@@ -783,12 +783,12 @@ INVOICE SUMMARY:
 • Total Amount: ${totalAmount}
 
 SERVICES PROVIDED:
-${invoice.items.map(item => `• ${item.description} (Qty: ${item.quantity}, Rate: ₹${item.unitPrice.toLocaleString('en-IN')}, Amount: ₹${item.amount.toLocaleString('en-IN')})`).join('\n')}
+${invoice.items.map(item => `• ${item.description} (Qty: ${item.quantity}, Rate: ${currencySymbol}${item.unitPrice.toLocaleString(currencyCode === 'INR' ? 'en-IN' : 'en-US')}, Amount: ${currencySymbol}${item.amount.toLocaleString(currencyCode === 'INR' ? 'en-IN' : 'en-US')})`).join('\n')}
 
 PAYMENT BREAKDOWN:
-• Subtotal: ₹${invoice.subtotal.toLocaleString('en-IN')}
-${invoice.taxRate > 0 ? `• Tax (${invoice.taxRate}%): ₹${invoice.taxAmount.toLocaleString('en-IN')}` : ''}
-${invoice.discountAmount > 0 ? `• Discount: -₹${invoice.discountAmount.toLocaleString('en-IN')}` : ''}
+• Subtotal: ${currencySymbol}${invoice.subtotal.toLocaleString(currencyCode === 'INR' ? 'en-IN' : 'en-US')}
+${invoice.taxRate > 0 ? `• Tax (${invoice.taxRate}%): ${currencySymbol}${invoice.taxAmount.toLocaleString(currencyCode === 'INR' ? 'en-IN' : 'en-US')}` : ''}
+${invoice.discountAmount > 0 ? `• Discount: -${currencySymbol}${invoice.discountAmount.toLocaleString(currencyCode === 'INR' ? 'en-IN' : 'en-US')}` : ''}
 • TOTAL AMOUNT: ${totalAmount}
 
 ${invoice.notes ? `ADDITIONAL NOTES:\n${invoice.notes}\n` : ''}${invoice.terms ? `TERMS & CONDITIONS:\n${invoice.terms}\n` : ''}PAYMENT INSTRUCTIONS:

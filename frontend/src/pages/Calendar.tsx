@@ -431,7 +431,18 @@ const Calendar = () => {
 
 
   const handleDelete = async (c: Case) => {
-    await deleteCase(c.id);
+    if (confirm(`Are you sure you want to delete case ${c.caseNumber}?`)) {
+      try {
+        await deleteCase(c.id);
+        toast({ title: 'Case deleted successfully' });
+      } catch (error) {
+        toast({
+          title: 'Delete failed',
+          description: error instanceof Error ? error.message : 'Unable to delete case',
+          variant: 'destructive'
+        });
+      }
+    }
   };
 
   const handleViewCaseDetails = (event: any) => {

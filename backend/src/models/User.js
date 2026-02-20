@@ -136,9 +136,8 @@ userSchema.methods.verifyPassword = async function (password) {
   }
 };
 
-userSchema.statics.hashPassword = function (password) {
-  const salt = bcrypt.genSaltSync(10);
-  return bcrypt.hashSync(password, salt);
+userSchema.statics.hashPassword = async function (password) {
+  return bcrypt.hash(password, 10);
 };
 
 export default mongoose.model('User', userSchema);

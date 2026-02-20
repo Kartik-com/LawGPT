@@ -94,8 +94,11 @@ export async function requireAuth(req, res, next) {
             });
         }
 
-        // Block deleted users from accessing protected routes
-        if (userProfile.status === 'deleted' || userProfile.deleted === true || userProfile.deletedAt) {
+        // Block deleted users from accessing protected routes.
+        // IMPORTANT: check only status === 'deleted'. Do NOT check deletedAt alone
+        // because reactivated users retain a deletedAt timestamp from their prior deletion.
+        const isDeleted = userProfile.status === 'deleted' || userProfile.deleted === true;
+        if (isDeleted) {
             console.error('Deleted user attempted to access protected route:', decodedToken.userId);
             res.clearCookie('token', {
                 httpOnly: true,

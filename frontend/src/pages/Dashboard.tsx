@@ -22,7 +22,7 @@ import { useLegalData } from '@/contexts/LegalDataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFormatting } from '@/contexts/FormattingContext';
 import { useNavigate } from 'react-router-dom';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, apiFetch } from '@/lib/api';
 
 interface DashboardStats {
   totalCases: number;
@@ -50,7 +50,7 @@ interface Activity {
 const Dashboard = () => {
   const { cases, clients, alerts } = useLegalData();
   const { user } = useAuth();
-  const { formatCurrency, formatRelativeDate } = useFormatting();
+  const { formatCurrency, formatRelativeDate, currencySymbol } = useFormatting();
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,8 +62,8 @@ const Dashboard = () => {
         setLoading(true);
 
         const [statsRes, activityRes] = await Promise.all([
-          fetch(getApiUrl('/api/dashboard/stats'), { credentials: 'include' }),
-          fetch(getApiUrl('/api/dashboard/activity'), { credentials: 'include' })
+          apiFetch(getApiUrl('/api/dashboard/stats'), { credentials: 'include' }),
+          apiFetch(getApiUrl('/api/dashboard/activity'), { credentials: 'include' })
         ]);
 
         if (statsRes.ok) {
@@ -160,7 +160,7 @@ const Dashboard = () => {
     },
     {
       title: "Revenue This Month",
-      value: dashboardStats?.revenue ? formatCurrency(dashboardStats.revenue.currentMonth) : "₹0",
+      value: dashboardStats?.revenue ? formatCurrency(dashboardStats.revenue.currentMonth) : formatCurrency(0),
       description: dashboardStats?.revenue && dashboardStats.revenue.billableHours > 0
         ? `${dashboardStats.revenue.billableHours.toFixed(1)} billable hours`
         : "Billing & payments",

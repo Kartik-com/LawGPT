@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useFormatting } from '@/contexts/FormattingContext';
 
 interface DashboardNotifications {
     alerts: Alert[];
@@ -37,6 +38,7 @@ export const NotificationDropdown = ({ unreadCount }: NotificationDropdownProps)
     const [notifications, setNotifications] = useState<DashboardNotifications | null>(null);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
+    const { formatCurrency } = useFormatting();
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Form state for creating alerts
@@ -430,7 +432,7 @@ export const NotificationDropdown = ({ unreadCount }: NotificationDropdownProps)
                                                                     Due: {formatDate(invoice.dueDate)}
                                                                 </p>
                                                                 <p className="text-[10px] font-medium text-destructive">
-                                                                    ₹{invoice.total.toLocaleString('en-IN')}
+                                                                    {formatCurrency(invoice.total)}
                                                                 </p>
                                                             </div>
                                                             <Badge variant="destructive" className="text-[10px] h-4 px-1">Overdue</Badge>

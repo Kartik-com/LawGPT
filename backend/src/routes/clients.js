@@ -159,7 +159,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const existing = await getDocumentById(COLLECTIONS.CLIENTS, req.params.id);
-    if (!existing || existing.owner !== req.user.userId) {
+    if (!existing || existing.owner.toString() !== req.user.userId.toString()) {
       return res.status(404).json({ error: 'Not found' });
     }
 
@@ -271,7 +271,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const existing = await getDocumentById(COLLECTIONS.CLIENTS, req.params.id);
-    if (!existing || existing.owner !== req.user.userId) {
+    if (!existing || existing.owner.toString() !== req.user.userId.toString()) {
       return res.status(404).json({ error: 'Not found' });
     }
 
@@ -291,7 +291,7 @@ router.get('/:id/cases', requireAuth, async (req, res) => {
 
     // Verify client exists and belongs to user
     const client = await getDocumentById(COLLECTIONS.CLIENTS, clientId);
-    if (!client || client.owner !== ownerId) {
+    if (!client || client.owner.toString() !== ownerId.toString()) {
       return res.status(404).json({ error: 'Client not found' });
     }
 

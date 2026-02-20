@@ -6,11 +6,17 @@
 const CURRENCY_SYMBOLS = {
     INR: '₹',
     USD: '$',
+    EUR: '€',
+    GBP: '£',
+    AED: 'د.إ',
 } as const;
 
 const CURRENCY_LOCALES = {
     INR: 'en-IN',
     USD: 'en-US',
+    EUR: 'de-DE',
+    GBP: 'en-GB',
+    AED: 'ar-AE',
 } as const;
 
 export type CurrencyCode = keyof typeof CURRENCY_SYMBOLS;

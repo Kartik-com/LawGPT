@@ -20,8 +20,8 @@ const OnboardingOverlay = () => {
                 aria-hidden="true"
             />
 
-            {/* Wizard content */}
-            <div className="relative z-10 max-w-3xl w-full mx-4">
+            {/* Wizard content — constrained to viewport so it never overflows */}
+            <div className="relative z-10 max-w-3xl w-full mx-4 max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col">
                 <OnboardingWizard />
             </div>
         </div>

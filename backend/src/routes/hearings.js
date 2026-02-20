@@ -155,7 +155,7 @@ router.get('/:id', async (req, res) => {
     const hearing = await getDocumentById(COLLECTIONS.HEARINGS, req.params.id);
 
     if (!hearing) return res.status(404).json({ error: 'Hearing not found' });
-    if (hearing.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    if (hearing.owner?.toString() !== req.user.userId.toString()) return res.status(403).json({ error: 'Forbidden' });
 
     // Populate case info
     if (hearing.caseId) {

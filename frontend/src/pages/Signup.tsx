@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Scale, Loader2, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, apiFetch } from '@/lib/api';
 
 const Signup = () => {
   const location = useLocation();
@@ -105,7 +105,7 @@ const Signup = () => {
     if (!pendingFormData) return;
     setIsReactivating(true);
     try {
-      const res = await fetch(getApiUrl('/api/auth/reactivate'), {
+      const res = await apiFetch(getApiUrl('/api/v1/auth/reactivate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

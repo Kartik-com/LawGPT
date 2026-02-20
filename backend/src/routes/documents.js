@@ -17,11 +17,51 @@ const router = express.Router();
 // Use memory storage for Cloudinary uploads
 const storage = multer.memoryStorage();
 
+// Allowed MIME types for upload
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'text/plain',
+  // Images
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'image/bmp',
+  'image/tiff',
+  // Office documents (docx, xlsx, pptx, etc.)
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/msword',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+];
+
+// File filter — reject disallowed types
+const fileFilter = (_req, file, cb) => {
+  const isAllowed =
+    ALLOWED_MIME_TYPES.includes(file.mimetype) ||
+    file.mimetype.startsWith('image/');
+
+  if (isAllowed) {
+    cb(null, true);
+  } else {
+    const err = new Error(
+      `File type '${file.mimetype}' is not allowed. ` +
+      'Accepted types: PDF, images, Office documents, and plain text.'
+    );
+    err.status = 400;
+    cb(err, false);
+  }
+};
+
 const upload = multer({
   storage,
+  fileFilter,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB limit
-  }
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
 });
 
 // Folders CRUD - All routes require authentication
@@ -197,25 +237,35 @@ router.delete('/folders/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Folder not found or access denied' });
     }
 
-    // Delete documents in the folder (only user's documents)
+    // Get all documents in this folder to clean up Cloudinary assets
     const docs = await queryDocuments(COLLECTIONS.DOCUMENTS, [
       { field: 'folderId', operator: '==', value: folderId },
       { field: 'ownerId', operator: '==', value: ownerId }
     ]);
 
-    for (const doc of docs) {
-      try {
-        // Delete from Cloudinary if URL is a Cloudinary URL
-        if (doc.url && (doc.url.includes('cloudinary.com') || doc.cloudinaryPublicId)) {
+    // Delete Cloudinary assets (still per-file as each has a unique public ID)
+    const cloudinaryDeletions = docs
+      .filter(doc => doc.url && (doc.url.includes('cloudinary.com') || doc.cloudinaryPublicId))
+      .map(async (doc) => {
+        try {
           const publicId = doc.cloudinaryPublicId || extractPublicIdFromUrl(doc.url);
-          if (publicId) {
-            await deleteFromCloudinary(publicId, doc.resourceType || 'auto');
-          }
+          if (publicId) await deleteFromCloudinary(publicId, doc.resourceType || 'auto');
+        } catch (e) {
+          console.error('Failed to delete Cloudinary asset:', e);
         }
-      } catch (e) {
-        console.error('Failed to delete file from Cloudinary:', e);
+      });
+    await Promise.allSettled(cloudinaryDeletions);
+
+    // 16. Fix N+1: bulk delete all documents in folder with a single query
+    // instead of looping and calling deleteDocument() for each one
+    const { Document } = await import('../models/index.js').catch(() => ({}));
+    if (Document) {
+      await Document.deleteMany({ folderId, ownerId });
+    } else {
+      // Fallback: use service-level delete if Mongoose model unavailable
+      for (const doc of docs) {
+        try { await deleteDocument(COLLECTIONS.DOCUMENTS, doc.id); } catch (_e) { /* continue */ }
       }
-      await deleteDocument(COLLECTIONS.DOCUMENTS, doc.id);
     }
 
     await deleteDocument(COLLECTIONS.FOLDERS, folderId);

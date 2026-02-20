@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, apiFetch } from '@/lib/api';
 
 type Theme = 'dark' | 'light' | 'system';
 
@@ -68,7 +68,7 @@ export function ThemeProvider({
   // Save theme to DB silently (fire-and-forget, no error surfacing)
   const saveThemeToDB = async (newTheme: Theme) => {
     try {
-      await fetch(getApiUrl('/api/auth/me'), {
+      await apiFetch(getApiUrl('/api/v1/auth/me'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

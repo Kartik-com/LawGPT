@@ -78,7 +78,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const item = await getDocumentById(COLLECTIONS.TIME_ENTRIES, req.params.id);
     if (!item) return res.status(404).json({ error: 'Not found' });
-    if (item.owner !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+    if (item.owner?.toString() !== req.user.userId.toString()) return res.status(403).json({ error: 'Forbidden' });
 
     await deleteDocument(COLLECTIONS.TIME_ENTRIES, req.params.id);
     res.json({ ok: true });

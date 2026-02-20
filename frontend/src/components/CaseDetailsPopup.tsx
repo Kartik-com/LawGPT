@@ -27,7 +27,7 @@ import { Case, Hearing } from '@/contexts/LegalDataContext';
 import { useLegalData } from '@/contexts/LegalDataContext';
 import { HearingRecordPopup } from './HearingRecordPopup';
 import { HearingViewPopup } from './HearingViewPopup';
-import { getApiUrl } from '@/lib/api';
+import { getApiUrl, apiFetch } from '@/lib/api';
 
 interface CaseDetailsPopupProps {
   case_: Case | null;
@@ -126,7 +126,7 @@ export const CaseDetailsPopup: React.FC<CaseDetailsPopupProps> = ({ case_, isOpe
 
     setIsLoading(true);
     try {
-      const response = await fetch(getApiUrl(`/api/hearings/case/${case_.id}`), {
+      const response = await apiFetch(getApiUrl(`/api/hearings/case/${case_.id}`), {
         credentials: 'include'
       });
 

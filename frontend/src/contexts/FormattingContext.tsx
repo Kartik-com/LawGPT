@@ -59,6 +59,9 @@ export const FormattingProvider: React.FC<FormattingProviderProps> = ({ children
     const currencySymbols: Record<CurrencyCode, string> = {
         INR: '₹',
         USD: '$',
+        EUR: '€',
+        GBP: '£',
+        AED: 'د.إ',
     };
 
     const currencySymbol = currencySymbols[currencyCode];
