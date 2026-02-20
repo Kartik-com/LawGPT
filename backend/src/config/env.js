@@ -26,8 +26,9 @@ const envSchema = z.object({
     // CORS
     CORS_ORIGIN: z.string().default('http://localhost:5173'),
 
-    // Redis — required in production
+    // Redis — required in production unless fallback is explicitly allowed
     REDIS_URL: z.string().optional(),
+    ALLOW_INSECURE_REDIS_FALLBACK: z.coerce.boolean().default(false),
 
     // Logging
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
@@ -49,8 +50,8 @@ function applyProductionRules(data) {
     const errors = [];
 
     if (data.NODE_ENV === 'production') {
-        if (!data.REDIS_URL) {
-            errors.push('REDIS_URL is required in production. Set REDIS_URL=rediss://... or use fallback only in development.');
+        if (!data.REDIS_URL && !data.ALLOW_INSECURE_REDIS_FALLBACK) {
+            errors.push('REDIS_URL is required in production. Set REDIS_URL=rediss://... or set ALLOW_INSECURE_REDIS_FALLBACK=true for small-scale deployments.');
         }
         if (!data.SENTRY_DSN) {
             // Warn but don't fail — Sentry is highly recommended but optional
@@ -60,7 +61,7 @@ function applyProductionRules(data) {
             console.warn('[startup] CLOUDINARY credentials not set — file uploads will fail');
         }
         if (data.JWT_SECRET.length < 64) {
-            errors.push('JWT_SECRET must be at least 64 characters in production (use openssl rand -base64 64)');
+            errors.push('JWT_SECRET must be at least 64 characters in production (use node -e "require(\'crypto\').randomBytes(64).toString(\'hex\')")');
         }
         if (data.JWT_REFRESH_SECRET.length < 64) {
             errors.push('JWT_REFRESH_SECRET must be at least 64 characters in production');
