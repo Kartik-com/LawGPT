@@ -247,7 +247,7 @@ const Documents = () => {
       console.log('Downloading via proxy:', { name: doc.name, url: downloadUrl });
 
       // Fetch from backend proxy
-      const response = await fetch(downloadUrl, { credentials: 'include' });
+      const response = await apiFetch(downloadUrl);
       if (!response.ok) throw new Error('Failed to download file');
 
       const blob = await response.blob();

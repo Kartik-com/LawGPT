@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
+import { getApiUrl } from '@/lib/api';
 
 const CSRF_COOKIE_NAME = 'csrf-token';
 const CSRF_HEADER_NAME = 'X-CSRF-Token';
@@ -27,7 +28,7 @@ export function useCSRF() {
     useEffect(() => {
         if (tokenRef.current) return;
 
-        fetch('/api/v1/auth/csrf-token', {
+        fetch(getApiUrl('/api/v1/auth/csrf-token'), {
             method: 'GET',
             credentials: 'include',
         })

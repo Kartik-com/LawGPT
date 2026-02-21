@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatting } from '@/contexts/FormattingContext';
+import { apiFetch } from '@/lib/api';
 
 interface DashboardNotifications {
     alerts: Alert[];
@@ -53,7 +54,7 @@ export const NotificationDropdown = ({ unreadCount }: NotificationDropdownProps)
         const fetchNotifications = async () => {
             try {
                 setLoading(true);
-                const response = await fetch('/api/dashboard/notifications', { credentials: 'include' });
+                const response = await apiFetch('/api/dashboard/notifications');
                 if (response.ok) {
                     const data = await response.json();
                     setNotifications(data);
